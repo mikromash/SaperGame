@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "CGHVwCESVRw=",
+  "success": true,
+  "projectFilePath": "D:\\Project\\Unity\\test-ai-coop\\релиз 3\\Super Puper saper\\RelayServer\\RelayServer.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\MIKU\\.nuget\\packages\\microsoft.netcore.app.ref\\9.0.14\\microsoft.netcore.app.ref.9.0.14.nupkg.sha512",
+    "C:\\Users\\MIKU\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\9.0.14\\microsoft.windowsdesktop.app.ref.9.0.14.nupkg.sha512",
+    "C:\\Users\\MIKU\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\9.0.14\\microsoft.aspnetcore.app.ref.9.0.14.nupkg.sha512",
+    "C:\\Users\\MIKU\\.nuget\\packages\\microsoft.netcore.app.host.win-x64\\9.0.14\\microsoft.netcore.app.host.win-x64.9.0.14.nupkg.sha512"
+  ],
+  "logs": []
+}
