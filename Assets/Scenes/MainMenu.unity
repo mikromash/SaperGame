@@ -1359,7 +1359,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.40392157, g: 0.03137255, b: 0.03137255, a: 0.9882353}
+  m_Color: {r: 0.3882353, g: 0, b: 0, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1458,7 +1458,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4914901666229049297, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
       propertyPath: m_text
-      value: Network connection
+      value: ONLINE
+      objectReference: {fileID: 0}
+    - target: {fileID: 4914901666229049297, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
+      propertyPath: m_fontSize
+      value: 124
+      objectReference: {fileID: 0}
+    - target: {fileID: 4914901666229049297, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
+      propertyPath: m_fontSizeBase
+      value: 124
       objectReference: {fileID: 0}
     - target: {fileID: 5191677220870143304, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
       propertyPath: m_Pivot.x
@@ -1486,7 +1494,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5191677220870143304, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 800
+      value: 600
       objectReference: {fileID: 0}
     - target: {fileID: 5191677220870143304, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
       propertyPath: m_SizeDelta.y
@@ -1718,7 +1726,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4914901666229049297, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
       propertyPath: m_text
-      value: Create a room
+      value: Create Game
       objectReference: {fileID: 0}
     - target: {fileID: 5191677220870143304, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
       propertyPath: m_Pivot.x
@@ -2468,7 +2476,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.40392157, g: 0.03137255, b: 0.03137255, a: 0.9882353}
+  m_Color: {r: 0.38679248, g: 0, b: 0, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -4693,7 +4701,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4914901666229049297, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
       propertyPath: m_text
-      value: Local connection
+      value: LOCAL
+      objectReference: {fileID: 0}
+    - target: {fileID: 4914901666229049297, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
+      propertyPath: m_fontSize
+      value: 125
+      objectReference: {fileID: 0}
+    - target: {fileID: 4914901666229049297, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
+      propertyPath: m_fontStyle
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4914901666229049297, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
+      propertyPath: m_fontSizeBase
+      value: 125
       objectReference: {fileID: 0}
     - target: {fileID: 5191677220870143304, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
       propertyPath: m_Pivot.x
@@ -4721,7 +4741,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5191677220870143304, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 800
+      value: 600
       objectReference: {fileID: 0}
     - target: {fileID: 5191677220870143304, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
       propertyPath: m_SizeDelta.y
@@ -4839,7 +4859,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.40392157, g: 0.03137255, b: 0.03137255, a: 0.9882353}
+  m_Color: {r: 0.3882353, g: 0, b: 0, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -4915,7 +4935,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.40392157, g: 0.03137255, b: 0.03137255, a: 0.9882353}
+  m_Color: {r: 0.3882353, g: 0, b: 0, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -5636,7 +5656,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.40392157, g: 0.03137255, b: 0.03137255, a: 0.9882353}
+  m_Color: {r: 0.3882353, g: 0, b: 0, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -5695,7 +5715,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4914901666229049297, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
       propertyPath: m_text
-      value: Connect to the room
+      value: Find Game
       objectReference: {fileID: 0}
     - target: {fileID: 5191677220870143304, guid: 585bf059ca4de4556b7ffbe95e577b38, type: 3}
       propertyPath: m_Pivot.x
@@ -6367,7 +6387,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.40392157, g: 0.03137255, b: 0.03137255, a: 0.9882353}
+  m_Color: {r: 0.3882353, g: 0, b: 0, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
