@@ -1957,7 +1957,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &329193649
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2384,23 +2384,23 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 4601340149940258729, guid: 82759d2c9d52e412480e2b1ff10b3dc7, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.size
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4601340149940258729, guid: 82759d2c9d52e412480e2b1ff10b3dc7, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
-      value: 6
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4601340149940258729, guid: 82759d2c9d52e412480e2b1ff10b3dc7, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
       value: 
-      objectReference: {fileID: 329193648}
+      objectReference: {fileID: 330585548}
     - target: {fileID: 4601340149940258729, guid: 82759d2c9d52e412480e2b1ff10b3dc7, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
-      value: SetActive
+      value: QuitGame
       objectReference: {fileID: 0}
     - target: {fileID: 4601340149940258729, guid: 82759d2c9d52e412480e2b1ff10b3dc7, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
-      value: UnityEngine.GameObject, UnityEngine
+      value: MainMenu, Assembly-CSharp
       objectReference: {fileID: 0}
     - target: {fileID: 4601340149940258729, guid: 82759d2c9d52e412480e2b1ff10b3dc7, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
