@@ -3,6 +3,18 @@ using UnityEngine.InputSystem;
 
 public sealed partial class CoopPrototypeController
 {
+    private struct WaitingRoomMenuState
+    {
+        public bool IsVisible;
+        public bool IsHost;
+        public bool CanStartGame;
+        public string Title;
+        public string Message;
+        public string RoomCode;
+    }
+
+    private WaitingRoomMenuState _waitingRoomMenuState;
+
     private void OnGUI()
     {
         if (_useCanvasUi)
@@ -14,12 +26,19 @@ public sealed partial class CoopPrototypeController
 
         if (_screen == MenuScreen.InGame)
         {
-            DrawInGameOverlay();
+            DrawRoomOverlay();
             if (_isPauseMenuOpen)
             {
                 DrawPauseMenu();
             }
 
+            return;
+        }
+
+        if (_screen == MenuScreen.WaitingRoom)
+        {
+            UpdateWaitingRoomMenuState();
+            DrawWaitingRoomOverlay();
             return;
         }
 
@@ -185,9 +204,124 @@ public sealed partial class CoopPrototypeController
         }
     }
 
-    private void DrawInGameOverlay()
+    private void DrawWaitingRoomOverlay()
     {
-        Rect overlay = new Rect(16f, 16f, 460f, 180f);
+        if (!_waitingRoomMenuState.IsVisible)
+        {
+            HideWaitingRoomMenu();
+            return;
+        }
+
+        float width = 560f;
+        float height = 360f;
+        Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
+
+        GUI.Box(panel, "Waiting Room");
+        GUILayout.BeginArea(new Rect(panel.x + 20f, panel.y + 38f, panel.width - 40f, panel.height - 56f));
+        GUILayout.Label("Mode: " + GetScenarioLabel());
+        GUILayout.Label("Relay: " + GetSelectedRelayHost() + ":" + _portText);
+        GUILayout.Label("Room: " + ActiveRoomDisplayName);
+        GUILayout.Label("Room code: " + _roomCode);
+        GUILayout.Label("Access: " + (_isPrivateRoom ? "Password protected" : "Public"));
+        GUILayout.Label("Ping: " + GetPingDisplayText());
+        GUILayout.Space(10f);
+        GUILayout.Label("Status: " + _status, WrapLabelStyle());
+        GUILayout.Space(14f);
+
+        if (_waitingRoomMenuState.IsHost)
+        {
+            DrawHostWaitingRoomMenu();
+        }
+        else
+        {
+            DrawClientWaitingRoomMenu();
+        }
+
+        GUILayout.Space(18f);
+        if (GUILayout.Button("Disconnect", GUILayout.Height(32f)))
+        {
+            ShutdownSession();
+            ResetToMenu();
+            HideWaitingRoomMenu();
+            Debug.Log("[CoopLobby] Waiting room closed by local disconnect.");
+        }
+
+        GUILayout.EndArea();
+    }
+
+    private void DrawHostWaitingRoomMenu()
+    {
+        GUILayout.Label(_waitingRoomMenuState.Title, WrapLabelStyle());
+        GUILayout.Label("Code: " + _waitingRoomMenuState.RoomCode);
+
+        if (!string.IsNullOrWhiteSpace(_waitingRoomMenuState.Message))
+        {
+            GUILayout.Space(6f);
+            GUILayout.Label(_waitingRoomMenuState.Message, WrapLabelStyle());
+        }
+
+        GUILayout.Space(12f);
+        GUI.enabled = _waitingRoomMenuState.CanStartGame;
+        if (GUILayout.Button("Start Game", GUILayout.Height(38f)))
+        {
+            StartGame();
+        }
+
+        GUI.enabled = true;
+    }
+
+    private void DrawClientWaitingRoomMenu()
+    {
+        GUILayout.Label(_waitingRoomMenuState.Title, WrapLabelStyle());
+
+        if (!string.IsNullOrWhiteSpace(_waitingRoomMenuState.Message))
+        {
+            GUILayout.Space(6f);
+            GUILayout.Label(_waitingRoomMenuState.Message, WrapLabelStyle());
+        }
+    }
+
+    private void UpdateWaitingRoomMenuState()
+    {
+        if (_screen != MenuScreen.WaitingRoom)
+        {
+            HideWaitingRoomMenu();
+            return;
+        }
+
+        _waitingRoomMenuState.IsVisible = true;
+        _waitingRoomMenuState.IsHost = _isHost;
+        _waitingRoomMenuState.CanStartGame = _canStartGame;
+        _waitingRoomMenuState.RoomCode = _roomCode;
+
+        if (_isHost)
+        {
+            if (_roomState == "player_joined")
+            {
+                _waitingRoomMenuState.Title = "Second player connected";
+                _waitingRoomMenuState.Message = "The host can start the match manually.";
+            }
+            else
+            {
+                _waitingRoomMenuState.Title = "Waiting for the second player";
+                _waitingRoomMenuState.Message = "The room is ready. Share the room code with the second player.";
+            }
+
+            return;
+        }
+
+        _waitingRoomMenuState.Title = "Waiting for the host to start the match";
+        _waitingRoomMenuState.Message = "The match will start automatically when the host presses Start Game.";
+    }
+
+    private void HideWaitingRoomMenu()
+    {
+        _waitingRoomMenuState = default;
+    }
+
+    private void DrawRoomOverlay()
+    {
+        Rect overlay = new Rect(16f, 16f, 460f, 240f);
         GUI.Box(overlay, "Room Connected");
         GUILayout.BeginArea(new Rect(overlay.x + 16f, overlay.y + 28f, overlay.width - 32f, overlay.height - 40f));
         GUILayout.Label("Mode: " + GetScenarioLabel());
@@ -196,6 +330,7 @@ public sealed partial class CoopPrototypeController
         GUILayout.Label("Room code: " + _roomCode);
         GUILayout.Label("Access: " + (_isPrivateRoom ? "Password protected" : "Public"));
         GUILayout.Label("Player id: " + _localPlayerId);
+        GUILayout.Label("Ping: " + GetPingDisplayText());
         GUILayout.Label("Move: WASD / arrows");
         GUILayout.Label("Status: " + _status, WrapLabelStyle());
 
@@ -203,6 +338,7 @@ public sealed partial class CoopPrototypeController
         {
             ShutdownSession();
             ResetToMenu();
+            HideWaitingRoomMenu();
         }
 
         GUILayout.EndArea();

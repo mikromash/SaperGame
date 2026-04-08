@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,12 +14,12 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     [SerializeField] private GameObject pauseSettingsRoot;
 
     [Header("Shared Text")]
-    [SerializeField] private Text statusText;
-    [SerializeField] private Text mainMenuModeText;
-    [SerializeField] private Text createModeText;
-    [SerializeField] private Text createRelayText;
-    [SerializeField] private Text joinModeText;
-    [SerializeField] private Text joinRelayText;
+    [SerializeField] private TMP_Text statusText;
+    [SerializeField] private TMP_Text mainMenuModeText;
+    [SerializeField] private TMP_Text createModeText;
+    [SerializeField] private TMP_Text createRelayText;
+    [SerializeField] private TMP_Text joinModeText;
+    [SerializeField] private TMP_Text joinRelayText;
 
     [Header("Main Menu Buttons")]
     [SerializeField] private Button localScenarioButton;
@@ -27,12 +28,12 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     [SerializeField] private Button openJoinRoomButton;
 
     [Header("Create Room Inputs")]
-    [SerializeField] private InputField createPlayerNameInput;
-    [SerializeField] private InputField createHostInput;
-    [SerializeField] private InputField createPortInput;
-    [SerializeField] private InputField createRoomNameInput;
+    [SerializeField] private TMP_InputField createPlayerNameInput;
+    [SerializeField] private TMP_InputField createHostInput;
+    [SerializeField] private TMP_InputField createPortInput;
+    [SerializeField] private TMP_InputField createRoomNameInput;
     [SerializeField] private Toggle createPrivateRoomToggle;
-    [SerializeField] private InputField createPasswordInput;
+    [SerializeField] private TMP_InputField createPasswordInput;
     [SerializeField] private GameObject createLocalFieldsRoot;
     [SerializeField] private GameObject createNetworkFieldsRoot;
     [SerializeField] private GameObject createPasswordRoot;
@@ -40,23 +41,26 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     [SerializeField] private Button createBackButton;
 
     [Header("Join Room Inputs")]
-    [SerializeField] private InputField joinPlayerNameInput;
-    [SerializeField] private InputField joinHostInput;
-    [SerializeField] private InputField joinPortInput;
-    [SerializeField] private InputField joinRoomCodeInput;
-    [SerializeField] private InputField joinPasswordInput;
+    [SerializeField] private TMP_InputField joinPlayerNameInput;
+    [SerializeField] private TMP_InputField joinHostInput;
+    [SerializeField] private TMP_InputField joinPortInput;
+    [SerializeField] private TMP_InputField joinRoomCodeInput;
+    [SerializeField] private TMP_InputField joinPasswordInput;
     [SerializeField] private GameObject joinLocalFieldsRoot;
     [SerializeField] private Button joinRoomButton;
     [SerializeField] private Button joinBackButton;
 
     [Header("In-Game Overlay")]
-    [SerializeField] private Text inGameModeText;
-    [SerializeField] private Text inGameRelayText;
-    [SerializeField] private Text inGameRoomNameText;
-    [SerializeField] private Text inGameRoomCodeText;
-    [SerializeField] private Text inGameAccessText;
-    [SerializeField] private Text inGamePlayerIdText;
-    [SerializeField] private Text inGameStatusText;
+    [SerializeField] private TMP_Text inGameModeText;
+    [SerializeField] private TMP_Text inGameRelayText;
+    [SerializeField] private TMP_Text inGameRoomNameText;
+    [SerializeField] private TMP_Text inGameRoomCodeText;
+    [SerializeField] private TMP_Text inGameAccessText;
+    [SerializeField] private TMP_Text inGamePlayerIdText;
+    [SerializeField] private TMP_Text inGamePingText;
+    [SerializeField] private TMP_Text inGameStatusText;
+    [SerializeField] private TMP_Text inGameLobbyMessageText;
+    [SerializeField] private Button startGameButton;
     [SerializeField] private Button disconnectButton;
 
     [Header("Pause Menu")]
@@ -139,6 +143,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         BindButton(createBackButton, OnBackToMainMenuClicked);
         BindButton(joinRoomButton, OnJoinRoomClicked);
         BindButton(joinBackButton, OnBackToMainMenuClicked);
+        BindButton(startGameButton, OnStartGameClicked);
         BindButton(disconnectButton, OnDisconnectClicked);
         BindButton(resumeButton, OnResumeClicked);
         BindButton(windowSettingsButton, OnWindowSettingsClicked);
@@ -190,7 +195,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         SetActive(mainMenuRoot, _controller.IsMainMenu);
         SetActive(createRoomRoot, _controller.IsCreateRoomScreen);
         SetActive(joinRoomRoot, _controller.IsJoinRoomScreen);
-        SetActive(inGameRoot, _controller.IsInGame);
+        SetActive(inGameRoot, _controller.IsInGame || _controller.IsWaitingRoom);
         SetActive(pauseMenuRoot, _controller.IsPauseMenuOpen);
         SetActive(pauseActionsRoot, _controller.IsPauseMenuOpen && !_controller.IsSettingsMenuOpen);
         SetActive(pauseSettingsRoot, _controller.IsPauseMenuOpen && _controller.IsSettingsMenuOpen);
@@ -211,7 +216,9 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         SetText(inGameRoomCodeText, _controller.RoomCode);
         SetText(inGameAccessText, _controller.AccessLabel);
         SetText(inGamePlayerIdText, _controller.LocalPlayerId.ToString());
+        SetText(inGamePingText, "Ping: " + _controller.PingDisplay);
         SetText(inGameStatusText, _controller.StatusText);
+        SetText(inGameLobbyMessageText, BuildLobbyMessage());
     }
 
     private void RefreshConditionalBlocks()
@@ -223,6 +230,13 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         SetActive(createNetworkFieldsRoot, !isLocal);
         SetActive(createPasswordRoot, showCreatePassword);
         SetActive(joinLocalFieldsRoot, isLocal);
+
+        if (startGameButton != null)
+        {
+            bool showStartButton = _controller.IsWaitingRoom && _controller.IsHost;
+            SetActive(startGameButton.gameObject, showStartButton);
+            startGameButton.interactable = _controller.CanStartGame;
+        }
     }
 
     private void SyncInputsFromController()
@@ -358,6 +372,17 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         RefreshAll();
     }
 
+    private void OnStartGameClicked()
+    {
+        if (_controller == null)
+        {
+            return;
+        }
+
+        _controller.TryStartGameFromUi();
+        RefreshAll();
+    }
+
     private void OnResumeClicked()
     {
         if (_controller == null)
@@ -468,7 +493,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         button.onClick.AddListener(callback);
     }
 
-    private static void BindInput(InputField input, UnityEngine.Events.UnityAction<string> callback)
+    private static void BindInput(TMP_InputField input, UnityEngine.Events.UnityAction<string> callback)
     {
         if (input == null || callback == null)
         {
@@ -478,7 +503,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         input.onValueChanged.AddListener(callback);
     }
 
-    private static void SetText(Text target, string value)
+    private static void SetText(TMP_Text target, string value)
     {
         if (target != null)
         {
@@ -494,7 +519,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         }
     }
 
-    private static void SetInputValue(InputField input, string value)
+    private static void SetInputValue(TMP_InputField input, string value)
     {
         if (input != null && input.text != value)
         {
@@ -510,9 +535,9 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         }
     }
 
-    private static string ReadInput(params InputField[] inputs)
+    private static string ReadInput(params TMP_InputField[] inputs)
     {
-        foreach (InputField input in inputs)
+        foreach (TMP_InputField input in inputs)
         {
             if (input != null)
             {
@@ -521,5 +546,25 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         }
 
         return string.Empty;
+    }
+
+    private string BuildLobbyMessage()
+    {
+        if (_controller == null || !_controller.IsWaitingRoom)
+        {
+            return string.Empty;
+        }
+
+        if (_controller.IsHost)
+        {
+            if (_controller.RoomState == "player_joined")
+            {
+                return "2-й игрок подключён";
+            }
+
+            return "Ожидание подключения 2-го игрока\nКод комнаты: " + _controller.RoomCode;
+        }
+
+        return "Ожидание запуска игры от хоста";
     }
 }

@@ -37,7 +37,7 @@ public sealed partial class CoopPrototypeController
     {
         _sceneAvatars.Clear();
 
-        CoopScenePlayerAvatar[] sceneAvatars = FindObjectsByType<CoopScenePlayerAvatar>(FindObjectsSortMode.None);
+        CoopScenePlayerAvatar[] sceneAvatars = FindObjectsByType<CoopScenePlayerAvatar>();
         foreach (CoopScenePlayerAvatar sceneAvatar in sceneAvatars)
         {
             if (sceneAvatar == null)
@@ -130,6 +130,8 @@ public sealed partial class CoopPrototypeController
         {
             return;
         }
+
+        _latestSnapshots = snapshots;
 
         HashSet<int> activeIds = new HashSet<int>();
 

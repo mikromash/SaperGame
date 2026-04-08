@@ -21,6 +21,10 @@ internal sealed class CoopNetworkMessage
     public float X = 0f;
     public float Z = 0f;
     public bool IsPrivate = false;
+    public string RoomState = string.Empty;
+    public bool IsHost = false;
+    public bool CanStartGame = false;
+    public long PingTicks = 0L;
     public CoopPlayerSnapshot[] Players = Array.Empty<CoopPlayerSnapshot>();
 }
 
@@ -160,6 +164,49 @@ internal sealed class CoopRelayClient
         }
     }
 
+    public void SendStartGameRequest()
+    {
+        if (ConnectionState != CoopPrototypeController.PlayerConnectionState.Connected)
+        {
+            return;
+        }
+
+        try
+        {
+            Send(new CoopNetworkMessage
+            {
+                Type = "StartGameRequest"
+            });
+        }
+        catch (Exception exception)
+        {
+            Status = "Connection lost: " + exception.Message;
+            Disconnect();
+        }
+    }
+
+    public void SendPing(long pingTicks)
+    {
+        if (ConnectionState != CoopPrototypeController.PlayerConnectionState.Connected)
+        {
+            return;
+        }
+
+        try
+        {
+            Send(new CoopNetworkMessage
+            {
+                Type = "Ping",
+                PingTicks = pingTicks
+            });
+        }
+        catch (Exception exception)
+        {
+            Status = "Connection lost: " + exception.Message;
+            Disconnect();
+        }
+    }
+
     public bool TryDequeue(out CoopNetworkMessage message)
     {
         return _incoming.TryDequeue(out message);
@@ -281,6 +328,10 @@ internal sealed class CoopRelayClient
 
 internal sealed class CoopEmbeddedRelayServer
 {
+    private const string RoomStateWaitingForPlayer = "waiting_for_player";
+    private const string RoomStatePlayerJoined = "player_joined";
+    private const string RoomStateInGame = "in_game";
+
     private static readonly object RoomCodeLock = new object();
     private static readonly System.Random RoomCodeRandom = new System.Random();
 
@@ -420,6 +471,9 @@ internal sealed class CoopEmbeddedRelayServer
                     PlayerId = player.PlayerId,
                     Password = string.Empty,
                     IsPrivate = room.IsPrivate,
+                    RoomState = room.State,
+                    IsHost = player.PlayerId == 1,
+                    CanStartGame = player.PlayerId == 1 && room.State == RoomStatePlayerJoined,
                     Players = room.BuildSnapshot()
                 });
 
@@ -437,6 +491,33 @@ internal sealed class CoopEmbeddedRelayServer
                     if (message != null && message.Type == "Move")
                     {
                         room.UpdatePosition(player.PlayerId, message.X, message.Z);
+                        continue;
+                    }
+
+                    if (message != null && message.Type == "Ping")
+                    {
+                        Send(writer, new CoopNetworkMessage
+                        {
+                            Type = "Pong",
+                            PingTicks = message.PingTicks
+                        });
+                        continue;
+                    }
+
+                    if (message != null && message.Type == "StartGameRequest")
+                    {
+                        string errorMessage;
+                        if (!room.TryStartGame(player.PlayerId, out errorMessage))
+                        {
+                            Send(writer, new CoopNetworkMessage
+                            {
+                                Type = "Error",
+                                Reason = errorMessage
+                            });
+                            continue;
+                        }
+
+                        room.BroadcastGameStarted();
                     }
                 }
             }
@@ -547,6 +628,10 @@ internal sealed class CoopEmbeddedRelayServer
 
 internal sealed class CoopEmbeddedRelayRoom : IDisposable
 {
+    private const string RoomStateWaitingForPlayer = "waiting_for_player";
+    private const string RoomStatePlayerJoined = "player_joined";
+    private const string RoomStateInGame = "in_game";
+
     private readonly object _sync = new object();
     private readonly Dictionary<int, CoopEmbeddedRelayPlayer> _players = new Dictionary<int, CoopEmbeddedRelayPlayer>();
     private readonly Dictionary<int, CoopEmbeddedRelayConnection> _connections = new Dictionary<int, CoopEmbeddedRelayConnection>();
@@ -557,6 +642,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
         RoomName = roomName;
         IsPrivate = isPrivate;
         Password = password ?? string.Empty;
+        State = RoomStateWaitingForPlayer;
     }
 
     public string RoomCode { get; }
@@ -566,6 +652,8 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
     public bool IsPrivate { get; }
 
     private string Password { get; }
+
+    public string State { get; private set; }
 
     public bool IsEmpty
     {
@@ -584,6 +672,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
         {
             CoopEmbeddedRelayPlayer player = CreatePlayer(1, playerName);
             _players[player.PlayerId] = player;
+            State = DetermineState();
             return player;
         }
     }
@@ -607,6 +696,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
             int playerId = _players.ContainsKey(1) ? 2 : 1;
             CoopEmbeddedRelayPlayer player = CreatePlayer(playerId, playerName);
             _players[player.PlayerId] = player;
+            State = DetermineState();
             error = string.Empty;
             return player;
         }
@@ -638,6 +728,41 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
         {
             _connections.Remove(playerId);
             _players.Remove(playerId);
+            State = DetermineState();
+        }
+    }
+
+    public bool TryStartGame(int requestingPlayerId, out string error)
+    {
+        lock (_sync)
+        {
+            if (!_players.ContainsKey(requestingPlayerId))
+            {
+                error = "Player is not part of this room.";
+                return false;
+            }
+
+            if (requestingPlayerId != 1)
+            {
+                error = "Only the host can start the game.";
+                return false;
+            }
+
+            if (_players.Count < 2)
+            {
+                error = "A second player has not connected yet.";
+                return false;
+            }
+
+            if (State == RoomStateInGame)
+            {
+                error = "The game has already started.";
+                return false;
+            }
+
+            State = RoomStateInGame;
+            error = string.Empty;
+            return true;
         }
     }
 
@@ -674,21 +799,12 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
             snapshot = BuildSnapshot();
         }
 
-        CoopNetworkMessage message = new CoopNetworkMessage
-        {
-            Type = "Snapshot",
-            RoomCode = RoomCode,
-            RoomName = RoomName,
-            IsPrivate = IsPrivate,
-            Players = snapshot
-        };
-
         List<int> toRemove = new List<int>();
         foreach (CoopEmbeddedRelayConnection connection in connections)
         {
             try
             {
-                connection.Send(message);
+                connection.Send(BuildRoomMessage("Snapshot", snapshot, connection.PlayerId));
             }
             catch
             {
@@ -708,6 +824,50 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
                 _connections.Remove(playerId);
                 _players.Remove(playerId);
             }
+
+            State = DetermineState();
+        }
+    }
+
+    public void BroadcastGameStarted()
+    {
+        CoopEmbeddedRelayConnection[] connections;
+        CoopPlayerSnapshot[] snapshot;
+
+        lock (_sync)
+        {
+            List<CoopEmbeddedRelayConnection> list = new List<CoopEmbeddedRelayConnection>(_connections.Values);
+            connections = list.ToArray();
+            snapshot = BuildSnapshot();
+        }
+
+        List<int> toRemove = new List<int>();
+        foreach (CoopEmbeddedRelayConnection connection in connections)
+        {
+            try
+            {
+                connection.Send(BuildRoomMessage("GameStarted", snapshot, connection.PlayerId));
+            }
+            catch
+            {
+                toRemove.Add(connection.PlayerId);
+            }
+        }
+
+        if (toRemove.Count == 0)
+        {
+            return;
+        }
+
+        lock (_sync)
+        {
+            foreach (int playerId in toRemove)
+            {
+                _connections.Remove(playerId);
+                _players.Remove(playerId);
+            }
+
+            State = DetermineState();
         }
     }
 
@@ -734,6 +894,37 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
             X = playerId == 1 ? -2f : 2f,
             Z = 0f
         };
+    }
+
+    private CoopNetworkMessage BuildRoomMessage(string type, CoopPlayerSnapshot[] snapshot, int recipientPlayerId)
+    {
+        return new CoopNetworkMessage
+        {
+            Type = type,
+            RoomCode = RoomCode,
+            RoomName = RoomName,
+            PlayerId = recipientPlayerId,
+            IsPrivate = IsPrivate,
+            RoomState = State,
+            IsHost = recipientPlayerId == 1,
+            CanStartGame = recipientPlayerId == 1 && State == RoomStatePlayerJoined,
+            Players = snapshot
+        };
+    }
+
+    private string DetermineState()
+    {
+        if (State == RoomStateInGame)
+        {
+            return RoomStateInGame;
+        }
+
+        if (_players.Count >= 2)
+        {
+            return RoomStatePlayerJoined;
+        }
+
+        return RoomStateWaitingForPlayer;
     }
 }
 

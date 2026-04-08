@@ -7,6 +7,7 @@ public sealed partial class CoopPrototypeController
     public static CoopPrototypeController Instance => _instance;
 
     public bool UseCanvasUi => _useCanvasUi;
+    public bool IsWaitingRoom => _screen == MenuScreen.WaitingRoom;
     public bool IsInGame => _screen == MenuScreen.InGame;
     public bool IsMainMenu => _screen == MenuScreen.MainMenu;
     public bool IsCreateRoomScreen => _screen == MenuScreen.CreateRoom;
@@ -30,6 +31,10 @@ public sealed partial class CoopPrototypeController
     public int LocalPlayerId => _localPlayerId;
     public string AccessLabel => _isPrivateRoom ? "Password protected" : "Public";
     public string ActiveRoomDisplayName => string.IsNullOrWhiteSpace(_connectedRoomName) ? _roomCode : _connectedRoomName;
+    public string RoomState => _roomState;
+    public bool IsHost => _isHost;
+    public bool CanStartGame => _canStartGame;
+    public string PingDisplay => GetPingDisplayText();
 
     public void AttachCanvasUi()
     {
@@ -154,6 +159,11 @@ public sealed partial class CoopPrototypeController
     public void TryJoinRoomFromUi()
     {
         JoinRoom();
+    }
+
+    public void TryStartGameFromUi()
+    {
+        StartGame();
     }
 
     public void ResumeGameplayFromUi()
