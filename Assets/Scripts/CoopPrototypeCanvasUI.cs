@@ -4,510 +4,281 @@ using UnityEngine.UI;
 
 public sealed class CoopPrototypeCanvasUI : MonoBehaviour
 {
-    [Header("Root Panels")]
-    [SerializeField] private GameObject mainMenuRoot;
-    [SerializeField] private GameObject createRoomRoot;
-    [SerializeField] private GameObject joinRoomRoot;
-    [SerializeField] private GameObject inGameRoot;
-    [SerializeField] private GameObject pauseMenuRoot;
-    [SerializeField] private GameObject pauseActionsRoot;
-    [SerializeField] private GameObject pauseSettingsRoot;
+    private enum MenuWindow { Main, Settings, ConnectionType, Create, Join, InGame }
 
-    [Header("Shared Text")]
-    [SerializeField] private TMP_Text statusText;
-    [SerializeField] private TMP_Text mainMenuModeText;
-    [SerializeField] private TMP_Text createModeText;
-    [SerializeField] private TMP_Text createRelayText;
-    [SerializeField] private TMP_Text joinModeText;
-    [SerializeField] private TMP_Text joinRelayText;
+    [Header("Global UI Elements")]
+    [SerializeField] private GameObject darkBackgroundOverlay; 
 
-    [Header("Main Menu Buttons")]
-    [SerializeField] private Button localScenarioButton;
-    [SerializeField] private Button networkScenarioButton;
-    [SerializeField] private Button openCreateRoomButton;
-    [SerializeField] private Button openJoinRoomButton;
+    [Header("Screens (Root Panels)")]
+    [SerializeField] private GameObject mainMenuScreen;       
+    [SerializeField] private GameObject settingsScreen;       
+    [SerializeField] private GameObject connectionTypeScreen; 
+    [SerializeField] private GameObject createRoomScreen;     
+    [SerializeField] private GameObject joinRoomScreen;       
 
-    [Header("Create Room Inputs")]
+    [Header("1. Main Menu")]
+    [SerializeField] private Button playButton;
+    [SerializeField] private Button settingsMenuButton;
+    [SerializeField] private Button quitButton;
+
+    [Header("2. Settings")]
+    [SerializeField] private Slider bgSoundsSlider;
+    [SerializeField] private Slider interactionSoundsSlider;
+    [SerializeField] private Slider volumeSlider;
+    [SerializeField] private Button settingsBackButton; 
+
+    [Header("3. Connection Type")]
+    [SerializeField] private Button localConnButton;
+    [SerializeField] private Button onlineConnButton; 
+    [SerializeField] private Button createRoomModeButton;
+    [SerializeField] private Button connectRoomModeButton;
+    [SerializeField] private Button connTypeBackButton;
+
+    [Header("4. Create Room")]
+    [SerializeField] private TMP_Text createStatusText;    
+    [SerializeField] private TMP_Text createModeLabelText; 
     [SerializeField] private TMP_InputField createPlayerNameInput;
-    [SerializeField] private TMP_InputField createHostInput;
-    [SerializeField] private TMP_InputField createPortInput;
-    [SerializeField] private TMP_InputField createRoomNameInput;
-    [SerializeField] private Toggle createPrivateRoomToggle;
+    [SerializeField] private TMP_InputField createRoomNameInput;   
+    [SerializeField] private TMP_InputField createRoomCodeInput;   
     [SerializeField] private TMP_InputField createPasswordInput;
-    [SerializeField] private GameObject createLocalFieldsRoot;
-    [SerializeField] private GameObject createNetworkFieldsRoot;
-    [SerializeField] private GameObject createPasswordRoot;
-    [SerializeField] private Button createRoomButton;
+    [SerializeField] private Toggle publicRoomToggle;              
+    [SerializeField] private Toggle passwordRoomToggle;            
+    [SerializeField] private Button startRoomButton;
     [SerializeField] private Button createBackButton;
 
-    [Header("Join Room Inputs")]
+    [Header("5. Join Room")]
+    [SerializeField] private TMP_Text joinStatusText;      
+    [SerializeField] private TMP_Text joinModeLabelText;
     [SerializeField] private TMP_InputField joinPlayerNameInput;
-    [SerializeField] private TMP_InputField joinHostInput;
-    [SerializeField] private TMP_InputField joinPortInput;
-    [SerializeField] private TMP_InputField joinRoomCodeInput;
-    [SerializeField] private TMP_InputField joinPasswordInput;
-    [SerializeField] private GameObject joinLocalFieldsRoot;
-    [SerializeField] private Button joinRoomButton;
+    [SerializeField] private TMP_InputField joinRoomCodeInput;     
+    [SerializeField] private TMP_InputField joinPasswordInput;     
+    [SerializeField] private Button connectButton;
     [SerializeField] private Button joinBackButton;
 
-    [Header("In-Game Overlay")]
-    [SerializeField] private TMP_Text inGameModeText;
-    [SerializeField] private TMP_Text inGameRelayText;
-    [SerializeField] private TMP_Text inGameRoomNameText;
-    [SerializeField] private TMP_Text inGameRoomCodeText;
-    [SerializeField] private TMP_Text inGameAccessText;
-    [SerializeField] private TMP_Text inGamePlayerIdText;
-    [SerializeField] private TMP_Text inGamePingText;
-    [SerializeField] private TMP_Text inGameStatusText;
-    [SerializeField] private TMP_Text inGameLobbyMessageText;
-    [SerializeField] private Button startGameButton;
-    [SerializeField] private Button disconnectButton;
-
-    [Header("Pause Menu")]
-    [SerializeField] private Button resumeButton;
-    [SerializeField] private Button windowSettingsButton;
-    [SerializeField] private Button leaveRoomButton;
-    [SerializeField] private Button exitGameButton;
-    [SerializeField] private Button fullscreenButton;
-    [SerializeField] private Button windowedButton;
-    [SerializeField] private Button pauseSettingsBackButton;
-
     private CoopPrototypeController _controller;
-    private bool _listenersBound;
 
     private void Awake()
     {
-        TryBindController();
         BindListeners();
-        RefreshAll();
+        InitializeToggles(); 
     }
 
     private void Start()
     {
         TryBindController();
-        RefreshAll();
-    }
-
-    private void OnEnable()
-    {
-        TryBindController();
-        RefreshAll();
-    }
-
-    private void OnDestroy()
-    {
-        if (_controller != null)
-        {
-            _controller.DetachCanvasUi();
-        }
+        ChangeWindow(MenuWindow.Main); 
     }
 
     private void Update()
     {
         TryBindController();
-        RefreshAll();
+        
+        if (_controller != null)
+        {
+            UpdateStatusText();
+
+            if (_controller.IsInGame || _controller.IsWaitingRoom)
+            {
+                ChangeWindow(MenuWindow.InGame);
+            }
+        }
     }
 
     private void TryBindController()
     {
-        if (_controller != null)
-        {
-            return;
-        }
-
+        if (_controller != null) return;
+        
         _controller = CoopPrototypeController.Instance;
-        if (_controller == null)
-        {
-            _controller = FindAnyObjectByType<CoopPrototypeController>();
-        }
+        if (_controller == null) _controller = FindAnyObjectByType<CoopPrototypeController>();
+        
+        if (_controller != null) _controller.AttachCanvasUi();
+    }
 
-        if (_controller != null)
+    private void OnDestroy()
+    {
+        if (_controller != null) _controller.DetachCanvasUi();
+    }
+
+    // --- ІНІЦІАЛІЗАЦІЯ ---
+
+    private void InitializeToggles()
+    {
+        if (publicRoomToggle != null) publicRoomToggle.isOn = false;
+        if (passwordRoomToggle != null) passwordRoomToggle.isOn = false;
+        
+        SetActive(createPasswordInput, false);
+    }
+
+    // --- НАВІГАЦІЯ ТА ВІДОБРАЖЕННЯ ---
+
+    private void ChangeWindow(MenuWindow window)
+    {
+        SetActive(mainMenuScreen, window == MenuWindow.Main);
+        SetActive(settingsScreen, window == MenuWindow.Settings);
+        SetActive(connectionTypeScreen, window == MenuWindow.ConnectionType);
+        SetActive(createRoomScreen, window == MenuWindow.Create);
+        SetActive(joinRoomScreen, window == MenuWindow.Join);
+
+        bool showOverlay = window == MenuWindow.Settings || 
+                           window == MenuWindow.ConnectionType || 
+                           window == MenuWindow.Create || 
+                           window == MenuWindow.Join;
+                           
+        SetActive(darkBackgroundOverlay, showOverlay); 
+
+        if (window == MenuWindow.Create || window == MenuWindow.Join)
         {
-            _controller.AttachCanvasUi();
-            PushInputsToController();
+            RefreshDynamicFields();
         }
     }
+
+    private void RefreshDynamicFields()
+    {
+        if (_controller == null) return;
+
+        bool isLocal = _controller.IsLocalScenario;
+
+        if (createModeLabelText) 
+            createModeLabelText.text = isLocal ? "Mode: Local (Create Room)" : "Mode: Online (Create Room)";
+            
+        if (joinModeLabelText) 
+            joinModeLabelText.text = isLocal ? "Mode: Local (Connect to Room)" : "Mode: Online (Connect to Room)";
+
+        // CREATE ROOM
+        SetActive(createRoomNameInput, !isLocal);  
+        SetActive(createRoomCodeInput, isLocal);   
+        SetActive(publicRoomToggle, !isLocal);     
+        SetActive(passwordRoomToggle, !isLocal);
+
+        // JOIN ROOM
+        SetActive(joinPasswordInput, !isLocal);
+
+        UpdatePasswordVisibility();
+    }
+
+    private void UpdatePasswordVisibility()
+    {
+        if (_controller == null) return;
+
+        bool isLocal = _controller.IsLocalScenario;
+        
+        if (isLocal)
+        {
+            SetActive(createPasswordInput, false);
+        }
+        else
+        {
+            bool showPassword = passwordRoomToggle != null && passwordRoomToggle.isOn;
+            SetActive(createPasswordInput, showPassword);
+        }
+    }
+
+    private void UpdateStatusText()
+    {
+        string statusMessage = "Status: " + _controller.StatusText;
+        
+        if (createStatusText != null) createStatusText.text = statusMessage;
+        if (joinStatusText != null) joinStatusText.text = statusMessage;
+    }
+
+    // --- ПРИВ'ЯЗКА ПОДІЙ ---
 
     private void BindListeners()
     {
-        if (_listenersBound)
+        // 1. Налаштування кнопок-перемикачів (Local / Online) з аніматором
+        ButtonAnimator localAnim = localConnButton != null ? localConnButton.GetComponent<ButtonAnimator>() : null;
+        ButtonAnimator onlineAnim = onlineConnButton != null ? onlineConnButton.GetComponent<ButtonAnimator>() : null;
+
+        BindButton(localConnButton, () => {
+            _controller?.SelectLocalScenario();
+            if (localAnim) localAnim.SetSelected(true);
+            if (onlineAnim) onlineAnim.SetSelected(false);
+        });
+
+        BindButton(onlineConnButton, () => {
+            _controller?.SelectNetworkScenario();
+            if (onlineAnim) onlineAnim.SetSelected(true);
+            if (localAnim) localAnim.SetSelected(false);
+        });
+
+        // 2. Стандартні кнопки
+        BindButton(playButton, () => ChangeWindow(MenuWindow.ConnectionType));
+        BindButton(settingsMenuButton, () => ChangeWindow(MenuWindow.Settings));
+        BindButton(quitButton, Application.Quit);
+
+        BindButton(settingsBackButton, () => ChangeWindow(MenuWindow.Main));
+        BindButton(createRoomModeButton, () => ChangeWindow(MenuWindow.Create));
+        BindButton(connectRoomModeButton, () => ChangeWindow(MenuWindow.Join));
+        BindButton(connTypeBackButton, () => ChangeWindow(MenuWindow.Main));
+
+        BindButton(startRoomButton, OnStartRoomClicked);
+        BindButton(createBackButton, () => ChangeWindow(MenuWindow.ConnectionType));
+
+        BindButton(connectButton, OnJoinRoomClicked);
+        BindButton(joinBackButton, () => ChangeWindow(MenuWindow.ConnectionType));
+
+        // 3. Слайдери та галочки (Toggles)
+        if (bgSoundsSlider) bgSoundsSlider.onValueChanged.AddListener(v => Debug.Log("BG Vol: " + v));
+        if (interactionSoundsSlider) interactionSoundsSlider.onValueChanged.AddListener(v => Debug.Log("Int Vol: " + v));
+        if (volumeSlider) volumeSlider.onValueChanged.AddListener(v => Debug.Log("Master Vol: " + v));
+
+        if (publicRoomToggle != null)
         {
-            return;
+            publicRoomToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn && passwordRoomToggle != null) passwordRoomToggle.isOn = false;
+            });
         }
 
-        BindButton(localScenarioButton, OnLocalScenarioClicked);
-        BindButton(networkScenarioButton, OnNetworkScenarioClicked);
-        BindButton(openCreateRoomButton, OnOpenCreateRoomClicked);
-        BindButton(openJoinRoomButton, OnOpenJoinRoomClicked);
-        BindButton(createRoomButton, OnCreateRoomClicked);
-        BindButton(createBackButton, OnBackToMainMenuClicked);
-        BindButton(joinRoomButton, OnJoinRoomClicked);
-        BindButton(joinBackButton, OnBackToMainMenuClicked);
-        BindButton(startGameButton, OnStartGameClicked);
-        BindButton(disconnectButton, OnDisconnectClicked);
-        BindButton(resumeButton, OnResumeClicked);
-        BindButton(windowSettingsButton, OnWindowSettingsClicked);
-        BindButton(leaveRoomButton, OnLeaveRoomClicked);
-        BindButton(exitGameButton, OnExitGameClicked);
-        BindButton(fullscreenButton, OnFullscreenClicked);
-        BindButton(windowedButton, OnWindowedClicked);
-        BindButton(pauseSettingsBackButton, OnPauseSettingsBackClicked);
-
-        BindInput(createPlayerNameInput, OnCreatePlayerNameChanged);
-        BindInput(createHostInput, OnCreateHostChanged);
-        BindInput(createPortInput, OnCreatePortChanged);
-        BindInput(createRoomNameInput, OnCreateRoomNameChanged);
-        BindInput(createPasswordInput, OnCreatePasswordChanged);
-        BindInput(joinPlayerNameInput, OnJoinPlayerNameChanged);
-        BindInput(joinHostInput, OnJoinHostChanged);
-        BindInput(joinPortInput, OnJoinPortChanged);
-        BindInput(joinRoomCodeInput, OnJoinRoomCodeChanged);
-        BindInput(joinPasswordInput, OnJoinPasswordChanged);
-
-        if (createPrivateRoomToggle != null)
+        if (passwordRoomToggle != null)
         {
-            createPrivateRoomToggle.onValueChanged.AddListener(OnCreatePrivateRoomChanged);
-        }
-
-        _listenersBound = true;
-    }
-
-    private void RefreshAll()
-    {
-        if (_controller == null)
-        {
-            SetActive(mainMenuRoot, true);
-            SetActive(createRoomRoot, false);
-            SetActive(joinRoomRoot, false);
-            SetActive(inGameRoot, false);
-            SetActive(pauseMenuRoot, false);
-            return;
-        }
-
-        SyncInputsFromController();
-        RefreshPanels();
-        RefreshTexts();
-        RefreshConditionalBlocks();
-    }
-
-    private void RefreshPanels()
-    {
-        SetActive(mainMenuRoot, _controller.IsMainMenu);
-        SetActive(createRoomRoot, _controller.IsCreateRoomScreen);
-        SetActive(joinRoomRoot, _controller.IsJoinRoomScreen);
-        SetActive(inGameRoot, _controller.IsInGame || _controller.IsWaitingRoom);
-        SetActive(pauseMenuRoot, _controller.IsPauseMenuOpen);
-        SetActive(pauseActionsRoot, _controller.IsPauseMenuOpen && !_controller.IsSettingsMenuOpen);
-        SetActive(pauseSettingsRoot, _controller.IsPauseMenuOpen && _controller.IsSettingsMenuOpen);
-    }
-
-    private void RefreshTexts()
-    {
-        SetText(statusText, _controller.StatusText);
-        SetText(mainMenuModeText, _controller.ScenarioLabel);
-        SetText(createModeText, _controller.ScenarioLabel);
-        SetText(createRelayText, _controller.SelectedRelayHost + ":" + _controller.PortText);
-        SetText(joinModeText, _controller.ScenarioLabel);
-        SetText(joinRelayText, _controller.SelectedRelayHost + ":" + _controller.PortText);
-
-        SetText(inGameModeText, _controller.ScenarioLabel);
-        SetText(inGameRelayText, _controller.SelectedRelayHost + ":" + _controller.PortText);
-        SetText(inGameRoomNameText, _controller.ActiveRoomDisplayName);
-        SetText(inGameRoomCodeText, _controller.RoomCode);
-        SetText(inGameAccessText, _controller.AccessLabel);
-        SetText(inGamePlayerIdText, _controller.LocalPlayerId.ToString());
-        SetText(inGamePingText, "Ping: " + _controller.PingDisplay);
-        SetText(inGameStatusText, _controller.StatusText);
-        SetText(inGameLobbyMessageText, BuildLobbyMessage());
-    }
-
-    private void RefreshConditionalBlocks()
-    {
-        bool isLocal = _controller.IsLocalScenario;
-        bool showCreatePassword = isLocal || _controller.IsPrivateRoom;
-
-        SetActive(createLocalFieldsRoot, isLocal);
-        SetActive(createNetworkFieldsRoot, !isLocal);
-        SetActive(createPasswordRoot, showCreatePassword);
-        SetActive(joinLocalFieldsRoot, isLocal);
-
-        if (startGameButton != null)
-        {
-            bool showStartButton = _controller.IsWaitingRoom && _controller.IsHost;
-            SetActive(startGameButton.gameObject, showStartButton);
-            startGameButton.interactable = _controller.CanStartGame;
+            passwordRoomToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn && publicRoomToggle != null) publicRoomToggle.isOn = false;
+                UpdatePasswordVisibility();
+            });
         }
     }
 
-    private void SyncInputsFromController()
-    {
-        SetInputValue(createPlayerNameInput, _controller.PlayerName);
-        SetInputValue(createHostInput, _controller.LocalHostAddress);
-        SetInputValue(createPortInput, _controller.PortText);
-        SetInputValue(createRoomNameInput, _controller.RoomName);
-        SetToggleValue(createPrivateRoomToggle, _controller.IsPrivateRoom);
-        SetInputValue(createPasswordInput, _controller.RoomPassword);
+    // --- ЛОГІКА МЕРЕЖІ ---
 
-        SetInputValue(joinPlayerNameInput, _controller.PlayerName);
-        SetInputValue(joinHostInput, _controller.LocalHostAddress);
-        SetInputValue(joinPortInput, _controller.PortText);
-        SetInputValue(joinRoomCodeInput, _controller.RoomCode);
-        SetInputValue(joinPasswordInput, _controller.RoomPassword);
-    }
-
-    private void PushInputsToController()
+    private void OnStartRoomClicked()
     {
-        if (_controller == null)
+        if (_controller == null) return;
+
+        _controller.SetPlayerName(createPlayerNameInput != null ? createPlayerNameInput.text : "Player");
+        _controller.SetRoomPassword(createPasswordInput != null ? createPasswordInput.text : "");
+        
+        if (_controller.IsLocalScenario)
         {
-            return;
+            _controller.SetRoomCode(createRoomCodeInput != null ? createRoomCodeInput.text : "");
+            _controller.SetPrivateRoom(false); 
+        }
+        else
+        {
+            _controller.SetRoomName(createRoomNameInput != null ? createRoomNameInput.text : "My Room");
+            _controller.SetPrivateRoom(passwordRoomToggle != null && passwordRoomToggle.isOn);
         }
 
-        _controller.SetPlayerName(ReadInput(createPlayerNameInput, joinPlayerNameInput));
-        _controller.SetLocalHostAddress(ReadInput(createHostInput, joinHostInput));
-        _controller.SetPortText(ReadInput(createPortInput, joinPortInput));
-        _controller.SetRoomName(ReadInput(createRoomNameInput));
-        _controller.SetRoomCode(ReadInput(joinRoomCodeInput));
-        _controller.SetRoomPassword(ReadInput(createPasswordInput, joinPasswordInput));
-        _controller.SetPrivateRoom(createPrivateRoomToggle != null && createPrivateRoomToggle.isOn);
-    }
-
-    private void OnLocalScenarioClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        _controller.SelectLocalScenario();
-        RefreshAll();
-    }
-
-    private void OnNetworkScenarioClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        _controller.SelectNetworkScenario();
-        RefreshAll();
-    }
-
-    private void OnOpenCreateRoomClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        PushInputsToController();
-        _controller.OpenCreateRoomScreen();
-        RefreshAll();
-    }
-
-    private void OnOpenJoinRoomClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        PushInputsToController();
-        _controller.OpenJoinRoomScreen();
-        RefreshAll();
-    }
-
-    private void OnCreateRoomClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        _controller.SetPlayerName(ReadInput(createPlayerNameInput));
-        _controller.SetLocalHostAddress(ReadInput(createHostInput));
-        _controller.SetPortText(ReadInput(createPortInput));
-        _controller.SetRoomName(ReadInput(createRoomNameInput));
-        _controller.SetRoomPassword(ReadInput(createPasswordInput));
-        _controller.SetPrivateRoom(createPrivateRoomToggle != null && createPrivateRoomToggle.isOn);
         _controller.TryCreateRoomFromUi();
-        RefreshAll();
     }
 
     private void OnJoinRoomClicked()
     {
-        if (_controller == null)
-        {
-            return;
-        }
+        if (_controller == null) return;
 
-        _controller.SetPlayerName(ReadInput(joinPlayerNameInput));
-        _controller.SetLocalHostAddress(ReadInput(joinHostInput));
-        _controller.SetPortText(ReadInput(joinPortInput));
-        _controller.SetRoomCode(ReadInput(joinRoomCodeInput));
-        _controller.SetRoomPassword(ReadInput(joinPasswordInput));
+        _controller.SetPlayerName(joinPlayerNameInput != null ? joinPlayerNameInput.text : "Player");
+        _controller.SetRoomCode(joinRoomCodeInput != null ? joinRoomCodeInput.text : "");
+        _controller.SetRoomPassword(joinPasswordInput != null ? joinPasswordInput.text : "");
+        
         _controller.TryJoinRoomFromUi();
-        RefreshAll();
     }
 
-    private void OnBackToMainMenuClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        _controller.BackToMainMenu();
-        RefreshAll();
-    }
-
-    private void OnDisconnectClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        _controller.DisconnectAndReturnToMenu();
-        RefreshAll();
-    }
-
-    private void OnStartGameClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        _controller.TryStartGameFromUi();
-        RefreshAll();
-    }
-
-    private void OnResumeClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        _controller.ResumeGameplayFromUi();
-        RefreshAll();
-    }
-
-    private void OnWindowSettingsClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        _controller.OpenPauseSettings();
-        RefreshAll();
-    }
-
-    private void OnLeaveRoomClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        _controller.LeaveRoom();
-        RefreshAll();
-    }
-
-    private void OnExitGameClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        _controller.ExitGameFromUi();
-    }
-
-    private void OnFullscreenClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        _controller.SetFullscreenMode();
-        RefreshAll();
-    }
-
-    private void OnWindowedClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        _controller.SetWindowedMode();
-        RefreshAll();
-    }
-
-    private void OnPauseSettingsBackClicked()
-    {
-        if (_controller == null)
-        {
-            return;
-        }
-
-        _controller.ClosePauseSettings();
-        RefreshAll();
-    }
-
-    private void OnCreatePlayerNameChanged(string value) => SafeControllerCall(() => _controller.SetPlayerName(value));
-    private void OnCreateHostChanged(string value) => SafeControllerCall(() => _controller.SetLocalHostAddress(value));
-    private void OnCreatePortChanged(string value) => SafeControllerCall(() => _controller.SetPortText(value));
-    private void OnCreateRoomNameChanged(string value) => SafeControllerCall(() => _controller.SetRoomName(value));
-    private void OnCreatePasswordChanged(string value) => SafeControllerCall(() => _controller.SetRoomPassword(value));
-    private void OnJoinPlayerNameChanged(string value) => SafeControllerCall(() => _controller.SetPlayerName(value));
-    private void OnJoinHostChanged(string value) => SafeControllerCall(() => _controller.SetLocalHostAddress(value));
-    private void OnJoinPortChanged(string value) => SafeControllerCall(() => _controller.SetPortText(value));
-    private void OnJoinRoomCodeChanged(string value) => SafeControllerCall(() => _controller.SetRoomCode(value));
-    private void OnJoinPasswordChanged(string value) => SafeControllerCall(() => _controller.SetRoomPassword(value));
-    private void OnCreatePrivateRoomChanged(bool value) => SafeControllerCall(() => _controller.SetPrivateRoom(value));
-
-    private void SafeControllerCall(System.Action action)
-    {
-        if (_controller == null || action == null)
-        {
-            return;
-        }
-
-        action.Invoke();
-        RefreshConditionalBlocks();
-        RefreshTexts();
-    }
+    // --- БЕЗПЕЧНІ ДОПОМІЖНІ МЕТОДИ (Тут були помилки CS0103) ---
 
     private static void BindButton(Button button, UnityEngine.Events.UnityAction callback)
     {
-        if (button == null || callback == null)
+        if (button != null && callback != null)
         {
-            return;
-        }
-
-        button.onClick.AddListener(callback);
-    }
-
-    private static void BindInput(TMP_InputField input, UnityEngine.Events.UnityAction<string> callback)
-    {
-        if (input == null || callback == null)
-        {
-            return;
-        }
-
-        input.onValueChanged.AddListener(callback);
-    }
-
-    private static void SetText(TMP_Text target, string value)
-    {
-        if (target != null)
-        {
-            target.text = value ?? string.Empty;
+            button.onClick.AddListener(callback);
         }
     }
 
@@ -519,52 +290,11 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         }
     }
 
-    private static void SetInputValue(TMP_InputField input, string value)
+    private static void SetActive(Component target, bool value)
     {
-        if (input != null && input.text != value)
+        if (target != null && target.gameObject != null && target.gameObject.activeSelf != value)
         {
-            input.SetTextWithoutNotify(value ?? string.Empty);
+            target.gameObject.SetActive(value);
         }
-    }
-
-    private static void SetToggleValue(Toggle toggle, bool value)
-    {
-        if (toggle != null && toggle.isOn != value)
-        {
-            toggle.SetIsOnWithoutNotify(value);
-        }
-    }
-
-    private static string ReadInput(params TMP_InputField[] inputs)
-    {
-        foreach (TMP_InputField input in inputs)
-        {
-            if (input != null)
-            {
-                return input.text ?? string.Empty;
-            }
-        }
-
-        return string.Empty;
-    }
-
-    private string BuildLobbyMessage()
-    {
-        if (_controller == null || !_controller.IsWaitingRoom)
-        {
-            return string.Empty;
-        }
-
-        if (_controller.IsHost)
-        {
-            if (_controller.RoomState == "player_joined")
-            {
-                return "2-й игрок подключён";
-            }
-
-            return "Ожидание подключения 2-го игрока\nКод комнаты: " + _controller.RoomCode;
-        }
-
-        return "Ожидание запуска игры от хоста";
     }
 }
