@@ -69,8 +69,9 @@ public sealed partial class CoopPrototypeController
         nextPosition.z = Mathf.Clamp(nextPosition.z, -9f, 9f);
         nextPosition.y = 0.6f;
         avatar.TargetPosition = nextPosition;
+        avatar.SceneAvatar.Position = nextPosition;
 
-        if (_relayClient != null && Time.unscaledTime - _lastMoveSentTime >= 0.04f)
+        if (_relayClient != null && Time.unscaledTime - _lastMoveSentTime >= MoveSendIntervalSeconds)
         {
             _relayClient.SendMove(nextPosition);
             _lastMoveSentTime = Time.unscaledTime;
@@ -148,7 +149,40 @@ public sealed partial class CoopPrototypeController
                 }
             }
 
-            avatar.TargetPosition = new Vector3(snapshot.X, 0.6f, snapshot.Z);
+            Vector3 snapshotPosition = new Vector3(snapshot.X, 0.6f, snapshot.Z);
+            if (snapshot.PlayerId == _localPlayerId)
+            {
+                float localDrift = Vector3.Distance(avatar.TargetPosition, snapshotPosition);
+                if (localDrift > LocalReconciliationThreshold)
+                {
+                    Debug.Log($"[CoopMovement] Reconciled local player. drift={localDrift:F2}, playerId={snapshot.PlayerId}");
+                    avatar.TargetPosition = snapshotPosition;
+                    avatar.SceneAvatar.Position = snapshotPosition;
+                }
+            }
+            else
+            {
+                float snapshotReceivedTime = Time.unscaledTime;
+                float snapshotInterval = avatar.LastSnapshotReceivedTime > 0f
+                    ? Mathf.Clamp(
+                        snapshotReceivedTime - avatar.LastSnapshotReceivedTime,
+                        RemoteInterpolationMinDuration,
+                        RemoteInterpolationMaxDuration)
+                    : RemoteInterpolationMinDuration;
+
+                Vector3 currentRenderedPosition = avatar.SceneAvatar.Position;
+                avatar.InterpolationFromPosition = currentRenderedPosition;
+                avatar.InterpolationToPosition = snapshotPosition;
+                avatar.InterpolationStartTime = snapshotReceivedTime;
+                avatar.InterpolationDuration = snapshotInterval;
+                avatar.ExtrapolatedVelocity = snapshotInterval > 0f
+                    ? (snapshotPosition - avatar.TargetPosition) / snapshotInterval
+                    : Vector3.zero;
+                avatar.LastSnapshotReceivedTime = snapshotReceivedTime;
+                avatar.HasRemoteInterpolation = true;
+                avatar.TargetPosition = snapshotPosition;
+            }
+
             avatar.SceneAvatar.SetVisible(true);
             avatar.SceneAvatar.SetDisplayName(snapshot.PlayerName);
         }
@@ -187,7 +221,9 @@ public sealed partial class CoopPrototypeController
         CoopAvatarView avatar = new CoopAvatarView
         {
             SceneAvatar = sceneAvatar,
-            TargetPosition = sceneAvatar.Position
+            TargetPosition = sceneAvatar.Position,
+            InterpolationFromPosition = sceneAvatar.Position,
+            InterpolationToPosition = sceneAvatar.Position
         };
 
         _avatars[playerId] = avatar;

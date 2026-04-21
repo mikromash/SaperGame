@@ -8,6 +8,11 @@ using UnityEngine.SceneManagement;
 public sealed partial class CoopPrototypeController : MonoBehaviour
 {
     private const float MoveSpeed = 6f;
+    private const float LocalReconciliationThreshold = 0.75f;
+    private const float MoveSendIntervalSeconds = 1f / 30f;
+    private const float RemoteInterpolationMinDuration = 0.04f;
+    private const float RemoteInterpolationMaxDuration = 0.12f;
+    private const float RemoteExtrapolationDuration = 0.08f;
     private const string LobbySceneName = "LobbyScene";
     private const string GameplaySceneName = "GameplayScene";
 
@@ -126,12 +131,50 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
         foreach (KeyValuePair<int, CoopAvatarView> pair in _avatars)
         {
             CoopAvatarView avatar = pair.Value;
-            if (avatar.SceneAvatar != null)
+            if (avatar.SceneAvatar == null)
             {
-                avatar.SceneAvatar.Position = Vector3.Lerp(avatar.SceneAvatar.Position, avatar.TargetPosition, Time.deltaTime * 12f);
-                avatar.SceneAvatar.FaceCamera(_camera);
+                continue;
             }
+
+            if (pair.Key == _localPlayerId)
+            {
+                avatar.SceneAvatar.Position = avatar.TargetPosition;
+            }
+            else
+            {
+                avatar.SceneAvatar.Position = EvaluateRemoteAvatarPosition(avatar);
+            }
+
+            avatar.SceneAvatar.FaceCamera(_camera);
         }
+    }
+
+    private Vector3 EvaluateRemoteAvatarPosition(CoopAvatarView avatar)
+    {
+        if (!avatar.HasRemoteInterpolation)
+        {
+            return avatar.TargetPosition;
+        }
+
+        float elapsed = Time.unscaledTime - avatar.InterpolationStartTime;
+        if (avatar.InterpolationDuration <= 0f)
+        {
+            return avatar.InterpolationToPosition;
+        }
+
+        float normalized = Mathf.Clamp01(elapsed / avatar.InterpolationDuration);
+        Vector3 interpolatedPosition = Vector3.Lerp(
+            avatar.InterpolationFromPosition,
+            avatar.InterpolationToPosition,
+            normalized);
+
+        float extrapolationTime = elapsed - avatar.InterpolationDuration;
+        if (extrapolationTime > 0f && extrapolationTime <= RemoteExtrapolationDuration)
+        {
+            interpolatedPosition += avatar.ExtrapolatedVelocity * extrapolationTime;
+        }
+
+        return interpolatedPosition;
     }
 
     private void PumpRelayMessages()
@@ -358,6 +401,11 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
         _sceneAvatars.Clear();
         _camera = Camera.main;
         HideWaitingRoomMenu();
+
+        if (string.Equals(scene.name, LobbySceneName, System.StringComparison.Ordinal))
+        {
+            TryRunPendingCustomMenuLaunch();
+        }
     }
 
     private void TransitionToGameplayScene()

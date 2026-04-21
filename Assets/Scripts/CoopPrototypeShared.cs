@@ -41,6 +41,13 @@ internal sealed class CoopAvatarView
 {
     public CoopScenePlayerAvatar SceneAvatar;
     public Vector3 TargetPosition;
+    public Vector3 InterpolationFromPosition;
+    public Vector3 InterpolationToPosition;
+    public Vector3 ExtrapolatedVelocity;
+    public float InterpolationStartTime;
+    public float InterpolationDuration;
+    public float LastSnapshotReceivedTime;
+    public bool HasRemoteInterpolation;
 }
 
 [Serializable]
@@ -331,6 +338,7 @@ internal sealed class CoopEmbeddedRelayServer
     private const string RoomStateWaitingForPlayer = "waiting_for_player";
     private const string RoomStatePlayerJoined = "player_joined";
     private const string RoomStateInGame = "in_game";
+    private const int SnapshotBroadcastIntervalMs = 50;
 
     private static readonly object RoomCodeLock = new object();
     private static readonly System.Random RoomCodeRandom = new System.Random();
@@ -415,7 +423,7 @@ internal sealed class CoopEmbeddedRelayServer
                 room.BroadcastSnapshot();
             }
 
-            Thread.Sleep(100);
+            Thread.Sleep(SnapshotBroadcastIntervalMs);
         }
     }
 
