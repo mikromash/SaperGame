@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 public sealed class CoopPrototypeCanvasUI : MonoBehaviour
 {
-    private enum MenuWindow { Main, Settings, ConnectionType, Create, Join, InGame }
+    private enum MenuWindow { Main, Settings, ConnectionType, Create, Join, WaitingRoom, InGame }
 
     [Header("Global UI Elements")]
     [SerializeField] private GameObject darkBackgroundOverlay; 
