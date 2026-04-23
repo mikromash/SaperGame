@@ -1,3 +1,4 @@
+using System.Collections; // Додано для Coroutine
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -15,6 +16,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     [SerializeField] private GameObject connectionTypeScreen; 
     [SerializeField] private GameObject createRoomScreen;     
     [SerializeField] private GameObject joinRoomScreen;       
+    [SerializeField] private GameObject waitingRoomScreen;    
 
     [Header("1. Main Menu")]
     [SerializeField] private Button playButton;
@@ -55,7 +57,26 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     [SerializeField] private Button connectButton;
     [SerializeField] private Button joinBackButton;
 
+    // --- ОНОВЛЕНИЙ БЛОК ВІКНА ОЧІКУВАННЯ ---
+    [Header("6. Waiting Room")]
+    [SerializeField] private TMP_Text waitingRoomModeTitleText;   // ДОДАНО: Текст для "Network mode waiting room"
+    [SerializeField] private GameObject waitingRoomNameContainer; // Контейнер або сам текст назви кімнати (щоб ховати в Local)
+    [SerializeField] private TMP_Text waitingRoomNameText;        // Назва кімнати
+    [SerializeField] private TMP_Text waitingRoomCodeText;        // Код кімнати
+    [SerializeField] private TMP_Text waitingRoomAccessText;      // Access (Public/Private)
+    
+    [SerializeField] private Button waitingRoomCopyCodeButton;    // Кнопка скопіювати код
+    [SerializeField] private TMP_Text waitingRoomCopyButtonText;  // Текст всередині кнопки копіювання ("Copy" -> "Скопійовано")
+
+    [SerializeField] private Button waitingRoomStartButton;       // Кнопка керування грою
+    [SerializeField] private TMP_Text waitingRoomStartButtonText; // Текст всередині кнопки керування ("Очікування" / "Почати гру")
+    
+    [SerializeField] private Button waitingRoomExitButton;        // Кнопка "Вийти"
+
     private CoopPrototypeController _controller;
+    private MenuWindow _currentWindow = MenuWindow.Main;
+    
+    private string _originalCopyButtonText = "Copy"; // Збереження оригінального тексту кнопки копіювання
 
     private void Awake()
     {
@@ -77,9 +98,18 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         {
             UpdateStatusText();
 
-            if (_controller.IsInGame || _controller.IsWaitingRoom)
+            if (_controller.IsInGame)
             {
                 ChangeWindow(MenuWindow.InGame);
+            }
+            else if (_controller.IsWaitingRoom)
+            {
+                ChangeWindow(MenuWindow.WaitingRoom);
+                UpdateWaitingRoomUI();
+            }
+            else if (_currentWindow == MenuWindow.WaitingRoom || _currentWindow == MenuWindow.InGame)
+            {
+                ChangeWindow(MenuWindow.Main);
             }
         }
     }
@@ -113,17 +143,16 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
 
     private void ChangeWindow(MenuWindow window)
     {
+        _currentWindow = window;
+
         SetActive(mainMenuScreen, window == MenuWindow.Main);
         SetActive(settingsScreen, window == MenuWindow.Settings);
         SetActive(connectionTypeScreen, window == MenuWindow.ConnectionType);
         SetActive(createRoomScreen, window == MenuWindow.Create);
         SetActive(joinRoomScreen, window == MenuWindow.Join);
+        SetActive(waitingRoomScreen, window == MenuWindow.WaitingRoom);
 
-        bool showOverlay = window == MenuWindow.Settings || 
-                           window == MenuWindow.ConnectionType || 
-                           window == MenuWindow.Create || 
-                           window == MenuWindow.Join;
-                           
+        bool showOverlay = window != MenuWindow.InGame && window != MenuWindow.Main;
         SetActive(darkBackgroundOverlay, showOverlay); 
 
         if (window == MenuWindow.Create || window == MenuWindow.Join)
@@ -144,13 +173,11 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         if (joinModeLabelText) 
             joinModeLabelText.text = isLocal ? "Mode: Local (Connect to Room)" : "Mode: Online (Connect to Room)";
 
-        // CREATE ROOM
         SetActive(createRoomNameInput, !isLocal);  
         SetActive(createRoomCodeInput, isLocal);   
         SetActive(publicRoomToggle, !isLocal);     
         SetActive(passwordRoomToggle, !isLocal);
 
-        // JOIN ROOM
         SetActive(joinPasswordInput, !isLocal);
 
         UpdatePasswordVisibility();
@@ -181,11 +208,56 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         if (joinStatusText != null) joinStatusText.text = statusMessage;
     }
 
+    // --- ОНОВЛЕНИЙ МЕТОД ---
+    private void UpdateWaitingRoomUI()
+    {
+        if (_controller == null) return;
+
+        bool isNetwork = _controller.IsNetworkScenario;
+        bool isHost = _controller.IsHost;
+        bool canStart = _controller.CanStartGame;
+
+        // ДОДАНО: Зміна заголовку на "Network mode waiting room" або "Local mode waiting room"
+        if (waitingRoomModeTitleText != null)
+        {
+            waitingRoomModeTitleText.text = isNetwork ? "Network mode waiting room" : "Local mode waiting room";
+        }
+
+        // 1. Room name (Показується тільки в Мережевій грі)
+        if (waitingRoomNameContainer != null) 
+            SetActive(waitingRoomNameContainer, isNetwork);
+        else if (waitingRoomNameText != null) 
+            SetActive(waitingRoomNameText, isNetwork);
+
+        if (isNetwork && waitingRoomNameText != null) 
+            waitingRoomNameText.text = _controller.ActiveRoomDisplayName;
+
+        // 2. Room code
+        if (waitingRoomCodeText != null) 
+            waitingRoomCodeText.text =_controller.RoomCode;
+
+        // 3. Access (Public/Private)
+        if (waitingRoomAccessText != null) 
+            waitingRoomAccessText.text = (_controller.IsPrivateRoom ? "Private" : "Public");
+
+        // 4. Кнопка керування грою (Тільки для Хоста)
+        SetActive(waitingRoomStartButton, isHost);
+
+        if (isHost && waitingRoomStartButton != null)
+        {
+            waitingRoomStartButton.interactable = canStart; // Disabled якщо не можна стартувати
+
+            if (waitingRoomStartButtonText != null)
+            {
+                waitingRoomStartButtonText.text = canStart ? "Start Game" : "Waiting for another player";
+            }
+        }
+    }
+
     // --- ПРИВ'ЯЗКА ПОДІЙ ---
 
     private void BindListeners()
     {
-        // 1. Налаштування кнопок-перемикачів (Local / Online) з аніматором
         ButtonAnimator localAnim = localConnButton != null ? localConnButton.GetComponent<ButtonAnimator>() : null;
         ButtonAnimator onlineAnim = onlineConnButton != null ? onlineConnButton.GetComponent<ButtonAnimator>() : null;
 
@@ -201,7 +273,6 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
             if (localAnim) localAnim.SetSelected(false);
         });
 
-        // 2. Стандартні кнопки
         BindButton(playButton, () => ChangeWindow(MenuWindow.ConnectionType));
         BindButton(settingsMenuButton, () => ChangeWindow(MenuWindow.Settings));
         BindButton(quitButton, Application.Quit);
@@ -217,7 +288,24 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         BindButton(connectButton, OnJoinRoomClicked);
         BindButton(joinBackButton, () => ChangeWindow(MenuWindow.ConnectionType));
 
-        // 3. Слайдери та галочки (Toggles)
+        // Логіка кнопок вікна очікування
+        BindButton(waitingRoomStartButton, () => _controller?.TryStartGameFromUi()); 
+        BindButton(waitingRoomExitButton, () => _controller?.DisconnectAndReturnToMenu());
+
+        // Збереження оригінального тексту кнопки копіювання
+        if (waitingRoomCopyButtonText != null)
+        {
+            _originalCopyButtonText = waitingRoomCopyButtonText.text;
+        }
+
+        BindButton(waitingRoomCopyCodeButton, () => {
+            if (_controller != null && !string.IsNullOrEmpty(_controller.RoomCode))
+            {
+                GUIUtility.systemCopyBuffer = _controller.RoomCode;
+                StartCoroutine(CopyButtonConfirmationRoutine()); 
+            }
+        });
+
         if (bgSoundsSlider) bgSoundsSlider.onValueChanged.AddListener(v => Debug.Log("BG Vol: " + v));
         if (interactionSoundsSlider) interactionSoundsSlider.onValueChanged.AddListener(v => Debug.Log("Int Vol: " + v));
         if (volumeSlider) volumeSlider.onValueChanged.AddListener(v => Debug.Log("Master Vol: " + v));
@@ -235,6 +323,24 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
                 if (isOn && publicRoomToggle != null) publicRoomToggle.isOn = false;
                 UpdatePasswordVisibility();
             });
+        }
+    }
+
+    // --- КОРУТИНА: Ефект кнопки копіювання ---
+    private IEnumerator CopyButtonConfirmationRoutine()
+    {
+        if (waitingRoomCopyButtonText == null) yield break;
+
+        // ВИПРАВЛЕНО: Спочатку міняємо текст
+        waitingRoomCopyButtonText.text = "Copied!";
+
+        // Чекаємо 1.5 секунди
+        yield return new WaitForSeconds(1.5f);
+
+        // Повертаємо початковий текст (наприклад "Copy")
+        if (waitingRoomCopyButtonText != null)
+        {
+            waitingRoomCopyButtonText.text = _originalCopyButtonText;
         }
     }
 
@@ -272,7 +378,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         _controller.TryJoinRoomFromUi();
     }
 
-    // --- БЕЗПЕЧНІ ДОПОМІЖНІ МЕТОДИ (Тут були помилки CS0103) ---
+    // --- БЕЗПЕЧНІ ДОПОМІЖНІ МЕТОДИ ---
 
     private static void BindButton(Button button, UnityEngine.Events.UnityAction callback)
     {
