@@ -4,18 +4,16 @@ using System.Net.Sockets;
 using System.Text;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Unity.Cinemachine;
 
 public sealed partial class CoopPrototypeController : MonoBehaviour
 {
+    // Базовые параметры перемещения и имена рабочих сцен.
     private const float MoveSpeed = 6f;
-    private const float LocalReconciliationThreshold = 0.75f;
-    private const float MoveSendIntervalSeconds = 1f / 30f;
-    private const float RemoteInterpolationMinDuration = 0.04f;
-    private const float RemoteInterpolationMaxDuration = 0.12f;
-    private const float RemoteExtrapolationDuration = 0.08f;
     private const string LobbySceneName = "LobbyScene";
     private const string GameplaySceneName = "GameplayScene";
 
+    // Внутреннее состояние экранов, которыми управляет контроллер.
     private enum MenuScreen
     {
         MainMenu,
@@ -25,12 +23,14 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
         InGame
     }
 
+    // Режим подключения: локальный relay или внешний сервер.
     private enum ConnectionScenario
     {
         Local,
         Network
     }
 
+    // Состояние подключения локального клиента к relay.
     internal enum PlayerConnectionState
     {
         Disconnected,
@@ -38,8 +38,10 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
         Connected
     }
 
+    // Главный singleton, который переживает смену сцен.
     private static CoopPrototypeController _instance;
 
+    // Runtime-обертки игроков и ссылки на заранее размещенные сценовые аватары.
     private readonly Dictionary<int, CoopAvatarView> _avatars = new Dictionary<int, CoopAvatarView>();
     private readonly Dictionary<int, CoopScenePlayerAvatar> _sceneAvatars = new Dictionary<int, CoopScenePlayerAvatar>();
 
@@ -49,6 +51,8 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
     private MenuScreen _screen = MenuScreen.MainMenu;
     private ConnectionScenario _scenario = ConnectionScenario.Local;
     private Camera _camera;
+    private bool _useSceneCameraRig;
+    private CinemachineCamera _sceneCinemachineCamera;
     private string _localHostAddress = "127.0.0.1";
     private string _relayHost = "127.0.0.1";
     private string _portText = "7777";
@@ -69,14 +73,18 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
     private bool _lastLoggedCanStartGame;
     private bool _isPauseMenuOpen;
     private bool _isSettingsMenuOpen;
+    private bool _isLocalAvatarInitialized;
     private float _lastMoveSentTime;
     private float _lastPingSentTime = -10f;
     private float _currentPingMs = -1f;
     private bool _isPingAvailable;
+    private PlayerMovement _localPlayerMovement;
+    private CharacterController _localCharacterController;
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Bootstrap()
     {
+        // Создаем управляющий объект заранее, чтобы не зависеть от сценовых экземпляров.
         if (_instance != null)
         {
             return;
@@ -89,13 +97,19 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
     private void Awake()
     {
+        Debug.Log($"[TRACE Lifecycle] Awake called on {name}. existingInstance={(_instance != null ? _instance.name : "null")}");
+
+        // Если контроллер уже существует, новый компонент удаляется как дубликат.
         if (_instance != null && _instance != this)
         {
-            Destroy(gameObject);
+            Debug.Log($"[TRACE Lifecycle] Duplicate CoopPrototypeController on {name}. Destroying only this component.");
+            Destroy(this);
             return;
         }
 
+        // Главный контроллер сохраняется между сценами и настраивает базовую среду игры.
         _instance = this;
+        DontDestroyOnLoad(gameObject);
         Application.runInBackground = true;
         Application.targetFrameRate = 60;
         QualitySettings.vSyncCount = 0;
@@ -104,15 +118,18 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
         Screen.SetResolution(1280, 720, FullScreenMode.Windowed);
         ApplyRelaySettings();
         SceneManager.sceneLoaded += HandleSceneLoaded;
+        SceneManager.activeSceneChanged += HandleActiveSceneChanged;
         HandleSceneLoaded(SceneManager.GetActiveScene(), LoadSceneMode.Single);
     }
 
     private void Update()
     {
+        // Сначала обновляем сеть и служебное состояние UI.
         PumpRelayMessages();
         UpdatePingMeasurement();
         LogUiStateIfChanged();
 
+        // Внутриигровой ввод и камера работают только в геймплейном состоянии.
         if (_screen == MenuScreen.InGame)
         {
             HandlePauseInput();
@@ -120,65 +137,33 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
         if (_screen == MenuScreen.InGame)
         {
-            if (!_isPauseMenuOpen)
-            {
-                HandleMovement();
-            }
-
+            HandleMovement();
             UpdateCamera();
         }
 
+        // Удаленные игроки интерполируются, локальный движется своим контроллером.
         foreach (KeyValuePair<int, CoopAvatarView> pair in _avatars)
         {
             CoopAvatarView avatar = pair.Value;
-            if (avatar.SceneAvatar == null)
+            if (avatar.SceneAvatar != null)
             {
-                continue;
+                if (pair.Key != _localPlayerId || _screen != MenuScreen.InGame)
+                {
+                    avatar.SceneAvatar.Position = Vector3.Lerp(avatar.SceneAvatar.Position, avatar.TargetPosition, Time.deltaTime * 12f);
+                }
+                else
+                {
+                    avatar.TargetPosition = avatar.SceneAvatar.Position;
+                }
+
+                avatar.SceneAvatar.FaceCamera(_camera);
             }
-
-            if (pair.Key == _localPlayerId)
-            {
-                avatar.SceneAvatar.Position = avatar.TargetPosition;
-            }
-            else
-            {
-                avatar.SceneAvatar.Position = EvaluateRemoteAvatarPosition(avatar);
-            }
-
-            avatar.SceneAvatar.FaceCamera(_camera);
         }
-    }
-
-    private Vector3 EvaluateRemoteAvatarPosition(CoopAvatarView avatar)
-    {
-        if (!avatar.HasRemoteInterpolation)
-        {
-            return avatar.TargetPosition;
-        }
-
-        float elapsed = Time.unscaledTime - avatar.InterpolationStartTime;
-        if (avatar.InterpolationDuration <= 0f)
-        {
-            return avatar.InterpolationToPosition;
-        }
-
-        float normalized = Mathf.Clamp01(elapsed / avatar.InterpolationDuration);
-        Vector3 interpolatedPosition = Vector3.Lerp(
-            avatar.InterpolationFromPosition,
-            avatar.InterpolationToPosition,
-            normalized);
-
-        float extrapolationTime = elapsed - avatar.InterpolationDuration;
-        if (extrapolationTime > 0f && extrapolationTime <= RemoteExtrapolationDuration)
-        {
-            interpolatedPosition += avatar.ExtrapolatedVelocity * extrapolationTime;
-        }
-
-        return interpolatedPosition;
     }
 
     private void PumpRelayMessages()
     {
+        // Все входящие сообщения relay синхронизируют локальное состояние комнаты.
         if (_relayClient == null)
         {
             return;
@@ -247,6 +232,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
     private void ResetToMenu()
     {
+        // Полный сброс runtime-состояния перед возвратом в лобби.
         ClearAvatars();
         _screen = MenuScreen.MainMenu;
         _localPlayerId = 0;
@@ -256,6 +242,11 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
         _canStartGame = false;
         _isPauseMenuOpen = false;
         _isSettingsMenuOpen = false;
+        _isLocalAvatarInitialized = false;
+        _useSceneCameraRig = false;
+        _sceneCinemachineCamera = null;
+        _localPlayerMovement = null;
+        _localCharacterController = null;
         _latestSnapshots = System.Array.Empty<CoopPlayerSnapshot>();
         ResetPingState();
         HideWaitingRoomMenu();
@@ -269,20 +260,32 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
     private void OnDestroy()
     {
+        Debug.Log($"[TRACE Lifecycle] CoopPrototypeController.OnDestroy called. instanceMatch={_instance == this}");
+
+        // Отписываемся только у активного singleton.
         if (_instance == this)
         {
             SceneManager.sceneLoaded -= HandleSceneLoaded;
+            SceneManager.activeSceneChanged -= HandleActiveSceneChanged;
+            _instance = null;
         }
+    }
+
+    private void HandleActiveSceneChanged(Scene oldScene, Scene newScene)
+    {
+        Debug.Log($"[TRACE ActiveSceneChanged] {oldScene.name} -> {newScene.name}");
     }
 
     private static string SanitizeRoomCode(string value)
     {
+        // Код комнаты нормализуется и ограничивается безопасной длиной.
         string trimmed = string.IsNullOrWhiteSpace(value) ? GenerateRoomCode() : value.Trim().ToUpperInvariant();
         return trimmed.Length > 12 ? trimmed.Substring(0, 12) : trimmed;
     }
 
     private static string GenerateRoomCode()
     {
+        // Генерация короткого кода без неоднозначных символов.
         const string alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
         StringBuilder builder = new StringBuilder(6);
         for (int index = 0; index < 6; index++)
@@ -306,6 +309,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
     private void ApplyRelaySettings()
     {
+        // Подтягиваем relay-настройки и локальный IP для быстрого старта локальной комнаты.
         CoopRelaySettingsData settings = CoopRelaySettings.Load();
         _localHostAddress = GetLocalIPv4();
         _relayHost = settings.relayHost;
@@ -319,6 +323,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
     private void UpdateRoomPresence(CoopNetworkMessage message)
     {
+        // Сетевое сообщение комнаты обновляет локальный снимок состояния UI и роли игрока.
         _roomCode = SanitizeRoomCode(message.RoomCode);
         _connectedRoomName = SanitizeRoomName(message.RoomName);
         _isPrivateRoom = message.IsPrivate;
@@ -338,6 +343,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
     private string BuildRoomStatus()
     {
+        // Единая точка сборки читаемого статуса для меню и overlay.
         if (_roomState == "in_game")
         {
             return "Match started.";
@@ -363,6 +369,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
     private static string GetLocalIPv4()
     {
+        // Пытаемся взять первый доступный IPv4 для локального сценария.
         try
         {
             IPHostEntry hostEntry = Dns.GetHostEntry(Dns.GetHostName());
@@ -383,42 +390,60 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
     private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        Debug.Log($"[CoopSceneFlow] Scene loaded. name={scene.name}, mode={mode}, screen={_screen}");
+        Debug.Log(
+            $"[TRACE SceneLoaded] scene={scene.name}, mode={mode}, screen={_screen}, roomState={_roomState}, " +
+            $"localPlayerId={_localPlayerId}, snapshotsCount={(_latestSnapshots == null ? -1 : _latestSnapshots.Length)}, " +
+            $"cameraMain={(Camera.main != null ? Camera.main.name : "null")}");
 
+        // После загрузки геймплея сначала готовим мир, затем накатываем последние снапшоты.
         if (IsGameplayScene(scene.name))
         {
+            _screen = MenuScreen.InGame;
+            Debug.Log("[TRACE SceneLoaded] Gameplay scene detected. Starting SetupWorld().");
             SetupWorld();
 
             if (_latestSnapshots != null && _latestSnapshots.Length > 0)
             {
+                Debug.Log($"[TRACE SceneLoaded] Applying cached snapshots after SetupWorld. Count={_latestSnapshots.Length}");
                 ApplySnapshot(_latestSnapshots);
+            }
+            else
+            {
+                Debug.LogWarning("[TRACE SceneLoaded] No cached snapshots available after SetupWorld.");
             }
 
             return;
         }
 
+        // Для остальных сцен очищаем только runtime-ссылки, не затрагивая сохраненные объекты.
         ClearAvatars();
         _sceneAvatars.Clear();
         _camera = Camera.main;
+        _useSceneCameraRig = false;
+        _sceneCinemachineCamera = null;
+        _isLocalAvatarInitialized = false;
+        _localPlayerMovement = null;
+        _localCharacterController = null;
         HideWaitingRoomMenu();
-
-        if (string.Equals(scene.name, LobbySceneName, System.StringComparison.Ordinal))
-        {
-            TryRunPendingCustomMenuLaunch();
-        }
     }
 
     private void TransitionToGameplayScene()
     {
-        Debug.Log($"[CoopSceneFlow] Transitioning to gameplay scene. roomCode={_roomCode}, playerId={_localPlayerId}");
-        _screen = MenuScreen.InGame;
+        // Переход запускается только после сетевого сигнала о старте матча.
+        Debug.Log(
+            $"[TRACE TransitionToGameplay] roomCode={_roomCode}, playerId={_localPlayerId}, " +
+            $"screenBefore={_screen}, roomState={_roomState}, " +
+            $"snapshotsCount={(_latestSnapshots == null ? -1 : _latestSnapshots.Length)}");
         _isPauseMenuOpen = false;
         _isSettingsMenuOpen = false;
+        Debug.Log("[TRACE TransitionToGameplay] About to call SceneManager.LoadScene(GameplayScene).");
         SceneManager.LoadScene(GameplaySceneName);
+        Debug.Log("[TRACE TransitionToGameplay] SceneManager.LoadScene(GameplayScene) returned.");
     }
 
     private void TransitionToLobbyScene()
     {
+        // Возврат в лобби нужен после disconnect и завершения сессии.
         if (SceneManager.GetActiveScene().name == LobbySceneName)
         {
             return;
@@ -430,6 +455,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
     private static bool IsGameplayScene(string sceneName)
     {
+        // Поддерживаем текущее имя сцены и старое тестовое имя на переходный период.
         return string.Equals(sceneName, GameplaySceneName, System.StringComparison.Ordinal) ||
                string.Equals(sceneName, "SampleScene", System.StringComparison.Ordinal);
     }
@@ -454,6 +480,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
     private void UpdatePingMeasurement()
     {
+        // Пинг измеряется только при активном соединении и наличии второго игрока.
         if (_relayClient == null || _relayClient.ConnectionState != PlayerConnectionState.Connected)
         {
             ResetPingState();
@@ -478,6 +505,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
     private void CompletePingMeasurement(long pingTicks)
     {
+        // Сглаживаем значение, чтобы UI не дергался от скачков задержки.
         if (pingTicks <= 0L)
         {
             return;
@@ -496,6 +524,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
     private bool CanMeasurePing()
     {
+        // Пинг имеет смысл только когда в комнате есть хотя бы два игрока.
         return _latestSnapshots != null && _latestSnapshots.Length >= 2;
     }
 

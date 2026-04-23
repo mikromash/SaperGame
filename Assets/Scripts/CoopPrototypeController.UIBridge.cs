@@ -2,8 +2,10 @@ using UnityEngine;
 
 public sealed partial class CoopPrototypeController
 {
+    // Публичный мост между внутренним состоянием контроллера и Canvas UI.
     private bool _useCanvasUi;
 
+    // Canvas UI читает только готовые свойства, не работая напрямую с приватными полями.
     public static CoopPrototypeController Instance => _instance;
 
     public bool UseCanvasUi => _useCanvasUi;
@@ -38,6 +40,7 @@ public sealed partial class CoopPrototypeController
 
     public void AttachCanvasUi()
     {
+        // Когда Canvas подключен, часть экранов перестает рисоваться через OnGUI.
         _useCanvasUi = true;
     }
 
@@ -48,6 +51,7 @@ public sealed partial class CoopPrototypeController
 
     public void SelectLocalScenario()
     {
+        // Команды ниже вызываются кнопками и полями Canvas UI.
         _scenario = ConnectionScenario.Local;
         _status = "Local mode selected. Enter the host address and port of the relay server.";
     }
@@ -80,6 +84,7 @@ public sealed partial class CoopPrototypeController
 
     public void DisconnectAndReturnToMenu()
     {
+        // Для UI не важно, как именно закрывается сессия, поэтому держим единый публичный метод.
         ShutdownSession();
         ResetToMenu();
     }
@@ -144,6 +149,7 @@ public sealed partial class CoopPrototypeController
 
     public void SetPrivateRoom(bool value)
     {
+        // Для публичной сетевой комнаты пароль сразу очищаем, чтобы UI не тянул лишнее состояние.
         _isPrivateRoom = value;
         if (!_isPrivateRoom && _scenario == ConnectionScenario.Network)
         {

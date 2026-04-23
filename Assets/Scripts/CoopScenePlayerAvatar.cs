@@ -2,6 +2,7 @@ using UnityEngine;
 
 public sealed class CoopScenePlayerAvatar : MonoBehaviour
 {
+    // Этот компонент висит на сценовой капсуле и представляет игрока в мире.
     [SerializeField] private int playerId = 1;
     [SerializeField] private TextMesh nameLabel;
     [SerializeField] private GameObject visualRoot;
@@ -10,12 +11,14 @@ public sealed class CoopScenePlayerAvatar : MonoBehaviour
 
     public Vector3 Position
     {
+        // Контроллер работает с аватаром через единое свойство позиции.
         get => transform.position;
         set => transform.position = value;
     }
 
     private void Reset()
     {
+        // Автоподбор ссылок для удобства настройки в редакторе.
         if (visualRoot == null)
         {
             visualRoot = gameObject;
@@ -29,6 +32,7 @@ public sealed class CoopScenePlayerAvatar : MonoBehaviour
 
     private void Awake()
     {
+        // На случай пустой сцены сами создаем простую подпись над игроком.
         if (visualRoot == null)
         {
             visualRoot = gameObject;
@@ -55,6 +59,7 @@ public sealed class CoopScenePlayerAvatar : MonoBehaviour
 
     public void SetDisplayName(string playerName)
     {
+        // Имя игрока приходит из сети и обновляется на подписи.
         if (nameLabel != null)
         {
             nameLabel.text = playerName;
@@ -63,6 +68,7 @@ public sealed class CoopScenePlayerAvatar : MonoBehaviour
 
     public void FaceCamera(Camera targetCamera)
     {
+        // Подпись всегда поворачивается к активной камере.
         if (nameLabel == null || targetCamera == null)
         {
             return;
@@ -74,6 +80,7 @@ public sealed class CoopScenePlayerAvatar : MonoBehaviour
 
     public void SetVisible(bool isVisible)
     {
+        // Используется при подключении/отключении игроков и сбросе сцены.
         GameObject target = visualRoot != null ? visualRoot : gameObject;
         target.SetActive(isVisible);
     }

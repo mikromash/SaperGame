@@ -3,6 +3,7 @@ using UnityEngine.InputSystem;
 
 public sealed partial class CoopPrototypeController
 {
+    // Снимок waiting-room UI, чтобы не размазывать состояние по нескольким методам отрисовки.
     private struct WaitingRoomMenuState
     {
         public bool IsVisible;
@@ -17,13 +18,21 @@ public sealed partial class CoopPrototypeController
 
     private void OnGUI()
     {
-        if (_useCanvasUi)
+        // Canvas обслуживает только ранние экраны, остальные окна пока рисуются fallback-логикой.
+        bool useCanvasForCurrentScreen =
+            _useCanvasUi &&
+            (_screen == MenuScreen.MainMenu ||
+             _screen == MenuScreen.CreateRoom ||
+             _screen == MenuScreen.JoinRoom);
+
+        if (useCanvasForCurrentScreen)
         {
             return;
         }
 
         GUI.color = Color.white;
 
+        // В геймплее и waiting room рисуем отдельные overlay-панели.
         if (_screen == MenuScreen.InGame)
         {
             DrawRoomOverlay();
@@ -52,6 +61,7 @@ public sealed partial class CoopPrototypeController
         GUILayout.Label("Status: " + _status, WrapLabelStyle());
         GUILayout.Space(12f);
 
+        // Старое меню создания/подключения комнаты оставлено как fallback до полной миграции на Canvas.
         switch (_screen)
         {
             case MenuScreen.MainMenu:
@@ -70,6 +80,7 @@ public sealed partial class CoopPrototypeController
 
     private void DrawMainMenu()
     {
+        // Выбор сценария подключения и переход к действиям комнаты.
         GUILayout.Label("Choose a connection scenario:");
         GUILayout.Space(10f);
 
@@ -106,6 +117,7 @@ public sealed partial class CoopPrototypeController
 
     private void DrawCreateRoom()
     {
+        // Форма создания комнаты меняется в зависимости от локального или сетевого режима.
         GUILayout.Label("Mode: " + GetScenarioLabel());
         GUILayout.Label("Player name:");
         _playerName = GUILayout.TextField(_playerName, 24);
@@ -168,6 +180,7 @@ public sealed partial class CoopPrototypeController
 
     private void DrawJoinRoom()
     {
+        // Экран подключения к уже существующей комнате.
         GUILayout.Label("Mode: " + GetScenarioLabel());
         GUILayout.Label("Player name:");
         _playerName = GUILayout.TextField(_playerName, 24);
@@ -206,6 +219,7 @@ public sealed partial class CoopPrototypeController
 
     private void DrawWaitingRoomOverlay()
     {
+        // Waiting room нужен до старта матча, пока для него нет отдельной Canvas-панели.
         if (!_waitingRoomMenuState.IsVisible)
         {
             HideWaitingRoomMenu();
@@ -251,6 +265,7 @@ public sealed partial class CoopPrototypeController
 
     private void DrawHostWaitingRoomMenu()
     {
+        // У хоста есть дополнительная кнопка старта матча.
         GUILayout.Label(_waitingRoomMenuState.Title, WrapLabelStyle());
         GUILayout.Label("Code: " + _waitingRoomMenuState.RoomCode);
 
@@ -272,6 +287,7 @@ public sealed partial class CoopPrototypeController
 
     private void DrawClientWaitingRoomMenu()
     {
+        // У клиента waiting room только информационный.
         GUILayout.Label(_waitingRoomMenuState.Title, WrapLabelStyle());
 
         if (!string.IsNullOrWhiteSpace(_waitingRoomMenuState.Message))
@@ -283,6 +299,7 @@ public sealed partial class CoopPrototypeController
 
     private void UpdateWaitingRoomMenuState()
     {
+        // Формируем текстовое состояние waiting room из текущих данных контроллера.
         if (_screen != MenuScreen.WaitingRoom)
         {
             HideWaitingRoomMenu();
@@ -321,6 +338,7 @@ public sealed partial class CoopPrototypeController
 
     private void DrawRoomOverlay()
     {
+        // Базовый ingame overlay с информацией о комнате и быстрым выходом.
         Rect overlay = new Rect(16f, 16f, 460f, 240f);
         GUI.Box(overlay, "Room Connected");
         GUILayout.BeginArea(new Rect(overlay.x + 16f, overlay.y + 28f, overlay.width - 32f, overlay.height - 40f));
@@ -346,6 +364,7 @@ public sealed partial class CoopPrototypeController
 
     private void DrawPauseMenu()
     {
+        // Пауза полностью локальная и не должна ломать сетевое состояние комнаты.
         DrawModalBackdrop();
 
         float width = 380f;
@@ -388,6 +407,7 @@ public sealed partial class CoopPrototypeController
 
     private void DrawPauseSettings()
     {
+        // Простейшие оконные настройки, доступные прямо из паузы.
         GUILayout.Label("Window mode");
         GUILayout.Space(10f);
 
@@ -412,6 +432,7 @@ public sealed partial class CoopPrototypeController
 
     private void DrawModalBackdrop()
     {
+        // Затемнение фона под модальным меню.
         Color previousColor = GUI.color;
         GUI.color = new Color(0f, 0f, 0f, 0.6f);
         GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
@@ -420,6 +441,7 @@ public sealed partial class CoopPrototypeController
 
     private void HandlePauseInput()
     {
+        // Escape открывает паузу или закрывает вложенное окно настроек.
         Keyboard keyboard = Keyboard.current;
         if (keyboard == null || !keyboard.escapeKey.wasPressedThisFrame)
         {
@@ -446,12 +468,14 @@ public sealed partial class CoopPrototypeController
 
     private void ResumeGameplay()
     {
+        // Возврат из паузы без изменения сетевого состояния.
         _isPauseMenuOpen = false;
         _isSettingsMenuOpen = false;
     }
 
     private void ExitGame()
     {
+        // Единая точка выхода для editor/runtime.
         ShutdownSession();
 
 #if UNITY_EDITOR

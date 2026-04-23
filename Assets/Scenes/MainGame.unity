@@ -1349,7 +1349,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2057335548}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.30013147, y: 1.05823e-22, z: -2.3055048e-23, w: 0.9538979}
+  m_LocalRotation: {x: 0.26865855, y: -0.05946216, z: 0.016618922, w: 0.9612548}
   m_LocalPosition: {x: 0, y: 3.7557826, z: -3.945771}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -1445,7 +1445,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineRotationComposer
   Composition:
-    ScreenPosition: {x: 0, y: 0}
+    ScreenPosition: {x: 0.049869835, y: 0.046189368}
     DeadZone:
       Enabled: 0
       Size: {x: 0.2, y: 0.2}

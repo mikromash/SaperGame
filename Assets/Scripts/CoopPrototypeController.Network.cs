@@ -2,6 +2,7 @@ public sealed partial class CoopPrototypeController
 {
     private void CreateRoom()
     {
+        // Создание комнаты поднимает локальный relay при необходимости и открывает host-сессию.
         if (!TryParsePort(out int port))
         {
             _status = "Relay port must be a number between 1 and 65535.";
@@ -78,6 +79,7 @@ public sealed partial class CoopPrototypeController
 
     private void JoinRoom()
     {
+        // Подключение к комнате выполняется через relay-клиент по существующему room code.
         if (!TryParsePort(out int port))
         {
             _status = "Relay port must be a number between 1 and 65535.";
@@ -126,6 +128,7 @@ public sealed partial class CoopPrototypeController
 
     private void StartGame()
     {
+        // Старт матча разрешен только хосту и только когда второй игрок уже подключился.
         if (_relayClient == null)
         {
             _status = "\u041d\u0435\u0442 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0433\u043e \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f \u043a \u043a\u043e\u043c\u043d\u0430\u0442\u0435.";
@@ -154,6 +157,7 @@ public sealed partial class CoopPrototypeController
 
     private void ShutdownSession()
     {
+        // Корректно закрываем и клиент, и локальный relay-сервер.
         _relayClient?.Disconnect();
         _relayClient = null;
 
@@ -163,11 +167,13 @@ public sealed partial class CoopPrototypeController
 
     private bool TryParsePort(out int port)
     {
+        // Принимаем только валидный пользовательский порт.
         return int.TryParse(_portText, out port) && port > 0 && port <= 65535;
     }
 
     private static string SanitizePlayerName(string value)
     {
+        // Ограничиваем имя игрока по длине и не допускаем пустое значение.
         if (string.IsNullOrWhiteSpace(value))
         {
             return "Player";

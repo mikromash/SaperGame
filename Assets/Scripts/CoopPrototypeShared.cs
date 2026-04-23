@@ -11,6 +11,7 @@ using UnityEngine;
 [Serializable]
 internal sealed class CoopNetworkMessage
 {
+    // Универсальный сетевой пакет для relay-клиента и embedded relay-сервера.
     public string Type = string.Empty;
     public string RoomCode = string.Empty;
     public string RoomName = string.Empty;
@@ -19,6 +20,7 @@ internal sealed class CoopNetworkMessage
     public string Reason = string.Empty;
     public int PlayerId = 0;
     public float X = 0f;
+    public float Y = 0f;
     public float Z = 0f;
     public bool IsPrivate = false;
     public string RoomState = string.Empty;
@@ -31,28 +33,25 @@ internal sealed class CoopNetworkMessage
 [Serializable]
 internal sealed class CoopPlayerSnapshot
 {
+    // Сжатое описание игрока, которое регулярно рассылается всем участникам комнаты.
     public int PlayerId = 0;
     public string PlayerName = string.Empty;
     public float X = 0f;
+    public float Y = 0f;
     public float Z = 0f;
 }
 
 internal sealed class CoopAvatarView
 {
+    // Runtime-связка сценового аватара и его целевой сетевой позиции.
     public CoopScenePlayerAvatar SceneAvatar;
     public Vector3 TargetPosition;
-    public Vector3 InterpolationFromPosition;
-    public Vector3 InterpolationToPosition;
-    public Vector3 ExtrapolatedVelocity;
-    public float InterpolationStartTime;
-    public float InterpolationDuration;
-    public float LastSnapshotReceivedTime;
-    public bool HasRemoteInterpolation;
 }
 
 [Serializable]
 internal sealed class CoopRelaySettingsData
 {
+    // Настройки relay по умолчанию, которые можно переопределить через Resources.
     public string relayHost = "127.0.0.1";
     public int relayPort = 7777;
 }
@@ -63,6 +62,7 @@ internal static class CoopRelaySettings
 
     public static CoopRelaySettingsData Load()
     {
+        // Конфиг загружается лениво и кешируется на время работы приложения.
         if (_cached != null)
         {
             return _cached;
@@ -94,6 +94,7 @@ internal static class CoopRelaySettings
 
 internal sealed class CoopRelayClient
 {
+    // Клиент подключается к relay, читает сообщения в фоне и складывает их в очередь для Unity-потока.
     private readonly ConcurrentQueue<CoopNetworkMessage> _incoming = new ConcurrentQueue<CoopNetworkMessage>();
     private readonly object _writeLock = new object();
 
@@ -109,6 +110,7 @@ internal sealed class CoopRelayClient
 
     public bool CreateRoom(string host, int port, string playerName, string roomName, bool isPrivate, string password)
     {
+        // Хост запрашивает создание новой комнаты.
         return Connect(host, port, new CoopNetworkMessage
         {
             Type = "CreateRoomRequest",
@@ -121,6 +123,7 @@ internal sealed class CoopRelayClient
 
     public bool JoinRoom(string host, int port, string roomCode, string playerName, string password)
     {
+        // Клиент подключается к уже существующей комнате по коду.
         return Connect(host, port, new CoopNetworkMessage
         {
             Type = "JoinRoomRequest",
@@ -132,6 +135,7 @@ internal sealed class CoopRelayClient
 
     public void Disconnect()
     {
+        // Локально сбрасываем состояние и закрываем сокет, если он еще открыт.
         ConnectionState = CoopPrototypeController.PlayerConnectionState.Disconnected;
         LocalPlayerId = 0;
         ConnectedRoomCode = null;
@@ -150,6 +154,7 @@ internal sealed class CoopRelayClient
 
     public void SendMove(Vector3 position)
     {
+        // Передаем серверу фактическую мировую позицию локального игрока, включая ось Y.
         if (ConnectionState != CoopPrototypeController.PlayerConnectionState.Connected)
         {
             return;
@@ -161,6 +166,7 @@ internal sealed class CoopRelayClient
             {
                 Type = "Move",
                 X = position.x,
+                Y = position.y,
                 Z = position.z
             });
         }
@@ -173,6 +179,7 @@ internal sealed class CoopRelayClient
 
     public void SendStartGameRequest()
     {
+        // Отдельная команда старта матча, доступная только хосту.
         if (ConnectionState != CoopPrototypeController.PlayerConnectionState.Connected)
         {
             return;
@@ -194,6 +201,7 @@ internal sealed class CoopRelayClient
 
     public void SendPing(long pingTicks)
     {
+        // Пинг измеряется простым echo-механизмом через relay.
         if (ConnectionState != CoopPrototypeController.PlayerConnectionState.Connected)
         {
             return;
@@ -221,6 +229,7 @@ internal sealed class CoopRelayClient
 
     private bool Connect(string host, int port, CoopNetworkMessage request)
     {
+        // Подключаемся, выполняем стартовый handshake и после этого запускаем фоновый read loop.
         Disconnect();
 
         try
@@ -289,6 +298,7 @@ internal sealed class CoopRelayClient
 
     private void ReadLoop(StreamReader reader)
     {
+        // Сетевой поток только читает данные и не касается Unity API напрямую.
         try
         {
             while (_client != null && _client.Connected)
@@ -321,6 +331,7 @@ internal sealed class CoopRelayClient
 
     private void Send(CoopNetworkMessage message)
     {
+        // Запись в сокет защищена lock, чтобы фоновые и main-thread отправки не конфликтовали.
         if (_writer == null)
         {
             return;
@@ -335,10 +346,10 @@ internal sealed class CoopRelayClient
 
 internal sealed class CoopEmbeddedRelayServer
 {
+    // Локальный relay-сервер нужен для сценария без внешнего backend.
     private const string RoomStateWaitingForPlayer = "waiting_for_player";
     private const string RoomStatePlayerJoined = "player_joined";
     private const string RoomStateInGame = "in_game";
-    private const int SnapshotBroadcastIntervalMs = 50;
 
     private static readonly object RoomCodeLock = new object();
     private static readonly System.Random RoomCodeRandom = new System.Random();
@@ -355,6 +366,7 @@ internal sealed class CoopEmbeddedRelayServer
 
     public void Start(int port)
     {
+        // Поднимаем listener и два служебных потока: прием клиентов и рассылку снапшотов.
         Stop();
 
         _listener = new TcpListener(IPAddress.Any, port);
@@ -370,6 +382,7 @@ internal sealed class CoopEmbeddedRelayServer
 
     public void Stop()
     {
+        // Полная остановка локального relay и очистка всех комнат.
         _running = false;
 
         try
@@ -391,6 +404,7 @@ internal sealed class CoopEmbeddedRelayServer
 
     private void AcceptLoop()
     {
+        // Каждое входящее подключение обслуживается в отдельном фоне.
         while (_running)
         {
             try
@@ -416,6 +430,7 @@ internal sealed class CoopEmbeddedRelayServer
 
     private void BroadcastLoop()
     {
+        // Периодическая отправка снапшотов всем комнатам.
         while (_running)
         {
             foreach (CoopEmbeddedRelayRoom room in _rooms.Values)
@@ -423,12 +438,13 @@ internal sealed class CoopEmbeddedRelayServer
                 room.BroadcastSnapshot();
             }
 
-            Thread.Sleep(SnapshotBroadcastIntervalMs);
+            Thread.Sleep(100);
         }
     }
 
     private void HandleClient(TcpClient client)
     {
+        // Один клиент: регистрация в комнате, затем цикл чтения Move/Ping/StartGame.
         CoopEmbeddedRelayConnection connection = null;
 
         try
@@ -498,7 +514,7 @@ internal sealed class CoopEmbeddedRelayServer
                     CoopNetworkMessage message = JsonUtility.FromJson<CoopNetworkMessage>(line);
                     if (message != null && message.Type == "Move")
                     {
-                        room.UpdatePosition(player.PlayerId, message.X, message.Z);
+                        room.UpdatePosition(player.PlayerId, message.X, message.Y, message.Z);
                         continue;
                     }
 
@@ -568,6 +584,7 @@ internal sealed class CoopEmbeddedRelayServer
         out CoopEmbeddedRelayPlayer player,
         out string error)
     {
+        // Здесь определяется, создаем новую комнату или присоединяемся к существующей.
         room = null;
         player = null;
         error = string.Empty;
@@ -636,6 +653,7 @@ internal sealed class CoopEmbeddedRelayServer
 
 internal sealed class CoopEmbeddedRelayRoom : IDisposable
 {
+    // Комната хранит игроков, их позиции и активные подключения.
     private const string RoomStateWaitingForPlayer = "waiting_for_player";
     private const string RoomStatePlayerJoined = "player_joined";
     private const string RoomStateInGame = "in_game";
@@ -676,6 +694,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
 
     public CoopEmbeddedRelayPlayer AddPlayer(string playerName)
     {
+        // Первый игрок в комнате всегда получает роль хоста.
         lock (_sync)
         {
             CoopEmbeddedRelayPlayer player = CreatePlayer(1, playerName);
@@ -687,6 +706,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
 
     public CoopEmbeddedRelayPlayer TryAddPlayer(string playerName, string password, out string error)
     {
+        // Второй игрок может войти только если есть место и проходит проверку пароля.
         lock (_sync)
         {
             if (_players.Count >= 2)
@@ -718,13 +738,15 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
         }
     }
 
-    public void UpdatePosition(int playerId, float x, float z)
+    public void UpdatePosition(int playerId, float x, float y, float z)
     {
+        // Сервер хранит последнюю известную позицию каждого игрока.
         lock (_sync)
         {
             if (_players.TryGetValue(playerId, out CoopEmbeddedRelayPlayer player))
             {
                 player.X = x;
+                player.Y = y;
                 player.Z = z;
             }
         }
@@ -742,6 +764,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
 
     public bool TryStartGame(int requestingPlayerId, out string error)
     {
+        // Валидация старта матча выполняется на стороне комнаты/сервера.
         lock (_sync)
         {
             if (!_players.ContainsKey(requestingPlayerId))
@@ -776,6 +799,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
 
     public CoopPlayerSnapshot[] BuildSnapshot()
     {
+        // Строим упорядоченный массив снапшотов, одинаковый для всех клиентов.
         lock (_sync)
         {
             List<CoopPlayerSnapshot> snapshots = new List<CoopPlayerSnapshot>();
@@ -786,6 +810,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
                     PlayerId = player.PlayerId,
                     PlayerName = player.PlayerName,
                     X = player.X,
+                    Y = player.Y,
                     Z = player.Z
                 });
             }
@@ -797,6 +822,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
 
     public void BroadcastSnapshot()
     {
+        // Регулярная синхронизация состояния комнаты.
         CoopEmbeddedRelayConnection[] connections;
         CoopPlayerSnapshot[] snapshot;
 
@@ -839,6 +865,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
 
     public void BroadcastGameStarted()
     {
+        // Одноразовое событие начала матча с последним актуальным снапшотом.
         CoopEmbeddedRelayConnection[] connections;
         CoopPlayerSnapshot[] snapshot;
 
@@ -895,17 +922,20 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
 
     private static CoopEmbeddedRelayPlayer CreatePlayer(int playerId, string playerName)
     {
+        // Начальные позиции игроков задаются сервером, чтобы клиенты стартовали согласованно.
         return new CoopEmbeddedRelayPlayer
         {
             PlayerId = playerId,
             PlayerName = playerName,
             X = playerId == 1 ? -2f : 2f,
+            Y = 0.9f,
             Z = 0f
         };
     }
 
     private CoopNetworkMessage BuildRoomMessage(string type, CoopPlayerSnapshot[] snapshot, int recipientPlayerId)
     {
+        // Каждому клиенту отправляется сообщение с его ролью и общим состоянием комнаты.
         return new CoopNetworkMessage
         {
             Type = type,
@@ -938,6 +968,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
 
 internal sealed class CoopEmbeddedRelayConnection : IDisposable
 {
+    // Обертка над сокетом конкретного игрока внутри локальной комнаты.
     private readonly TcpClient _client;
     private readonly StreamWriter _writer;
     private readonly object _writeLock = new object();
@@ -976,8 +1007,10 @@ internal sealed class CoopEmbeddedRelayConnection : IDisposable
 
 internal sealed class CoopEmbeddedRelayPlayer
 {
+    // Серверная модель игрока внутри комнаты.
     public int PlayerId;
     public string PlayerName;
     public float X;
+    public float Y;
     public float Z;
 }
