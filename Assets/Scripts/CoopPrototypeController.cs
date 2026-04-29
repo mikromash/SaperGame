@@ -44,6 +44,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
     // Runtime-обертки игроков и ссылки на заранее размещенные сценовые аватары.
     private readonly Dictionary<int, CoopAvatarView> _avatars = new Dictionary<int, CoopAvatarView>();
     private readonly Dictionary<int, CoopScenePlayerAvatar> _sceneAvatars = new Dictionary<int, CoopScenePlayerAvatar>();
+    private readonly Dictionary<int, Vector3> _sceneSpawnPositions = new Dictionary<int, Vector3>();
 
     private CoopEmbeddedRelayServer _localRelayServer;
     private CoopRelayClient _relayClient;
@@ -203,6 +204,14 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
             if (message.Type == "Pong")
             {
                 CompletePingMeasurement(message.PingTicks);
+                continue;
+            }
+
+            if (message.Type == "MinesweeperCommand")
+            {
+                UpdateRoomPresence(message);
+                ApplySnapshot(message.Players);
+                ApplyMinesweeperCommand(message);
                 continue;
             }
 

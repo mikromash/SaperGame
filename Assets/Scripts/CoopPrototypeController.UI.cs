@@ -4,18 +4,6 @@ using UnityEngine.InputSystem;
 public sealed partial class CoopPrototypeController
 {
     // Снимок waiting-room UI, чтобы не размазывать состояние по нескольким методам отрисовки.
-    private struct WaitingRoomMenuState
-    {
-        public bool IsVisible;
-        public bool IsHost;
-        public bool CanStartGame;
-        public string Title;
-        public string Message;
-        public string RoomCode;
-    }
-
-    private WaitingRoomMenuState _waitingRoomMenuState;
-
     private void OnGUI()
     {
         // Canvas обслуживает только ранние экраны, остальные окна пока рисуются fallback-логикой.
@@ -23,7 +11,8 @@ public sealed partial class CoopPrototypeController
             _useCanvasUi &&
             (_screen == MenuScreen.MainMenu ||
              _screen == MenuScreen.CreateRoom ||
-             _screen == MenuScreen.JoinRoom);
+             _screen == MenuScreen.JoinRoom ||
+             _screen == MenuScreen.WaitingRoom);
 
         if (useCanvasForCurrentScreen)
         {
@@ -46,8 +35,6 @@ public sealed partial class CoopPrototypeController
 
         if (_screen == MenuScreen.WaitingRoom)
         {
-            UpdateWaitingRoomMenuState();
-            DrawWaitingRoomOverlay();
             return;
         }
 
@@ -217,6 +204,7 @@ public sealed partial class CoopPrototypeController
         }
     }
 
+#if false
     private void DrawWaitingRoomOverlay()
     {
         // Waiting room нужен до старта матча, пока для него нет отдельной Canvas-панели.
@@ -334,6 +322,12 @@ public sealed partial class CoopPrototypeController
     private void HideWaitingRoomMenu()
     {
         _waitingRoomMenuState = default;
+    }
+
+#endif
+
+    private void HideWaitingRoomMenu()
+    {
     }
 
     private void DrawRoomOverlay()

@@ -155,6 +155,41 @@ public sealed partial class CoopPrototypeController
         _status = "\u0417\u0430\u043f\u0443\u0441\u043a \u043c\u0430\u0442\u0447\u0430...";
     }
 
+    public bool IsMinesweeperSyncActive
+    {
+        get
+        {
+            return _screen == MenuScreen.InGame &&
+                   _relayClient != null &&
+                   _relayClient.ConnectionState == PlayerConnectionState.Connected;
+        }
+    }
+
+    public void SendMinesweeperCommand(string action, int cellX = -1, int cellY = -1, int boardSeed = 0)
+    {
+        if (!IsMinesweeperSyncActive)
+        {
+            return;
+        }
+
+        _relayClient.SendMinesweeperCommand(action, cellX, cellY, boardSeed);
+    }
+
+    private void ApplyMinesweeperCommand(CoopNetworkMessage message)
+    {
+        Minesweeper.GameController controller = UnityEngine.Object.FindAnyObjectByType<Minesweeper.GameController>();
+        if (controller == null)
+        {
+            return;
+        }
+
+        controller.HandleNetworkCommand(
+            message.MinesweeperAction,
+            message.CellX,
+            message.CellY,
+            message.BoardSeed);
+    }
+
     private void ShutdownSession()
     {
         // Корректно закрываем и клиент, и локальный relay-сервер.

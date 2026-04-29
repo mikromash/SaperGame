@@ -4,6 +4,9 @@ using Unity.Cinemachine;
 
 public sealed partial class CoopPrototypeController
 {
+    private static readonly Vector3 PlayerOneFallbackSpawnPosition = new Vector3(0.5f, 3.3f, 5.3f);
+    private static readonly Vector3 PlayerTwoFallbackSpawnPosition = new Vector3(2.48f, 3.35f, 5.3f);
+
     private void SetupWorld()
     {
         // Инициализация мира после загрузки геймплейной сцены.
@@ -60,6 +63,7 @@ public sealed partial class CoopPrototypeController
     {
         // Сохраняем сценовые аватары по PlayerId, чтобы потом связать их с сетевыми снапшотами.
         _sceneAvatars.Clear();
+        _sceneSpawnPositions.Clear();
 
         CoopScenePlayerAvatar[] sceneAvatars = FindObjectsByType<CoopScenePlayerAvatar>();
         foreach (CoopScenePlayerAvatar sceneAvatar in sceneAvatars)
@@ -73,6 +77,7 @@ public sealed partial class CoopPrototypeController
                 $"[TRACE CacheSceneAvatars] Found avatar object={sceneAvatar.name}, playerId={sceneAvatar.PlayerId}, " +
                 $"position={sceneAvatar.Position}");
             _sceneAvatars[sceneAvatar.PlayerId] = sceneAvatar;
+            _sceneSpawnPositions[sceneAvatar.PlayerId] = sceneAvatar.Position;
         }
     }
 
@@ -240,7 +245,8 @@ public sealed partial class CoopPrototypeController
                 $"pos=({snapshot.X}, {snapshot.Y}, {snapshot.Z})");
             activeIds.Add(snapshot.PlayerId);
 
-            if (!_avatars.TryGetValue(snapshot.PlayerId, out CoopAvatarView avatar) || avatar.SceneAvatar == null)
+            bool isNewAvatar = !_avatars.TryGetValue(snapshot.PlayerId, out CoopAvatarView avatar) || avatar.SceneAvatar == null;
+            if (isNewAvatar)
             {
                 avatar = GetOrCreateSceneAvatar(snapshot.PlayerId);
                 if (avatar == null)
@@ -254,6 +260,9 @@ public sealed partial class CoopPrototypeController
                 $"scenePos={(avatar.SceneAvatar != null ? avatar.SceneAvatar.Position.ToString() : "null")}");
 
             Vector3 snapshotPosition = new Vector3(snapshot.X, snapshot.Y, snapshot.Z);
+            Vector3 targetPosition = _screen == MenuScreen.InGame && isNewAvatar
+                ? GetSceneSpawnPosition(snapshot.PlayerId, snapshotPosition)
+                : snapshotPosition;
             avatar.SceneAvatar.SetVisible(true);
             avatar.SceneAvatar.SetDisplayName(snapshot.PlayerName);
 
@@ -264,8 +273,8 @@ public sealed partial class CoopPrototypeController
                     $"sceneAvatarPos={avatar.SceneAvatar.Position}, snapshotPos={snapshotPosition}");
                 if (!_isLocalAvatarInitialized)
                 {
-                    avatar.SceneAvatar.Position = snapshotPosition;
-                    avatar.TargetPosition = snapshotPosition;
+                    avatar.SceneAvatar.Position = targetPosition;
+                    avatar.TargetPosition = targetPosition;
                     EnsureLocalAvatarMovement(avatar);
                     Debug.Log(
                         $"[TRACE ApplySnapshot] Local avatar initialized. newScenePos={avatar.SceneAvatar.Position}, " +
@@ -281,7 +290,7 @@ public sealed partial class CoopPrototypeController
                 continue;
             }
 
-            avatar.TargetPosition = snapshotPosition;
+            avatar.TargetPosition = targetPosition;
             Debug.Log(
                 $"[TRACE ApplySnapshot] Remote avatar target set. playerId={snapshot.PlayerId}, targetPos={avatar.TargetPosition}");
         }
@@ -358,11 +367,77 @@ public sealed partial class CoopPrototypeController
     private Vector3 GetSceneSpawnPosition(int playerId, Vector3 fallbackPosition)
     {
         // Если в сцене есть готовая точка игрока, используем ее как приоритетную.
+        if (_sceneSpawnPositions.TryGetValue(playerId, out Vector3 sceneSpawnPosition))
+        {
+            return sceneSpawnPosition;
+        }
+
         if (_sceneAvatars.TryGetValue(playerId, out CoopScenePlayerAvatar sceneAvatar) && sceneAvatar != null)
         {
             return sceneAvatar.Position;
         }
 
+        if (playerId == 1)
+        {
+            return PlayerOneFallbackSpawnPosition;
+        }
+
+        if (playerId == 2)
+        {
+            return PlayerTwoFallbackSpawnPosition;
+        }
+
         return fallbackPosition;
+    }
+
+    public void ResetPlayersToMinesweeperStart()
+    {
+        if (_screen != MenuScreen.InGame)
+        {
+            return;
+        }
+
+        foreach (KeyValuePair<int, CoopAvatarView> pair in _avatars)
+        {
+            CoopAvatarView avatar = pair.Value;
+            if (avatar?.SceneAvatar == null)
+            {
+                continue;
+            }
+
+            Vector3 spawnPosition = GetSceneSpawnPosition(pair.Key, avatar.SceneAvatar.Position);
+            TeleportAvatar(avatar, spawnPosition);
+        }
+
+        foreach (KeyValuePair<int, CoopScenePlayerAvatar> pair in _sceneAvatars)
+        {
+            if (_avatars.ContainsKey(pair.Key) || pair.Value == null)
+            {
+                continue;
+            }
+
+            pair.Value.Position = GetSceneSpawnPosition(pair.Key, pair.Value.Position);
+        }
+
+        _lastMoveSentTime = -10f;
+    }
+
+    private void TeleportAvatar(CoopAvatarView avatar, Vector3 position)
+    {
+        CharacterController controller = avatar.SceneAvatar.GetComponent<CharacterController>();
+        bool wasControllerEnabled = controller != null && controller.enabled;
+
+        if (controller != null)
+        {
+            controller.enabled = false;
+        }
+
+        avatar.SceneAvatar.Position = position;
+        avatar.TargetPosition = position;
+
+        if (controller != null)
+        {
+            controller.enabled = wasControllerEnabled;
+        }
     }
 }

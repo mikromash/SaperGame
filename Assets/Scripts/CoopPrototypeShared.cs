@@ -27,6 +27,10 @@ internal sealed class CoopNetworkMessage
     public bool IsHost = false;
     public bool CanStartGame = false;
     public long PingTicks = 0L;
+    public string MinesweeperAction = string.Empty;
+    public int CellX = -1;
+    public int CellY = -1;
+    public int BoardSeed = 0;
     public CoopPlayerSnapshot[] Players = Array.Empty<CoopPlayerSnapshot>();
 }
 
@@ -213,6 +217,31 @@ internal sealed class CoopRelayClient
             {
                 Type = "Ping",
                 PingTicks = pingTicks
+            });
+        }
+        catch (Exception exception)
+        {
+            Status = "Connection lost: " + exception.Message;
+            Disconnect();
+        }
+    }
+
+    public void SendMinesweeperCommand(string action, int cellX, int cellY, int boardSeed)
+    {
+        if (ConnectionState != CoopPrototypeController.PlayerConnectionState.Connected)
+        {
+            return;
+        }
+
+        try
+        {
+            Send(new CoopNetworkMessage
+            {
+                Type = "MinesweeperCommand",
+                MinesweeperAction = action ?? string.Empty,
+                CellX = cellX,
+                CellY = cellY,
+                BoardSeed = boardSeed
             });
         }
         catch (Exception exception)
@@ -525,6 +554,16 @@ internal sealed class CoopEmbeddedRelayServer
                             Type = "Pong",
                             PingTicks = message.PingTicks
                         });
+                        continue;
+                    }
+
+                    if (message != null && message.Type == "MinesweeperCommand")
+                    {
+                        room.BroadcastMinesweeperCommand(
+                            message.MinesweeperAction,
+                            message.CellX,
+                            message.CellY,
+                            message.BoardSeed);
                         continue;
                     }
 
@@ -882,6 +921,58 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
             try
             {
                 connection.Send(BuildRoomMessage("GameStarted", snapshot, connection.PlayerId));
+            }
+            catch
+            {
+                toRemove.Add(connection.PlayerId);
+            }
+        }
+
+        if (toRemove.Count == 0)
+        {
+            return;
+        }
+
+        lock (_sync)
+        {
+            foreach (int playerId in toRemove)
+            {
+                _connections.Remove(playerId);
+                _players.Remove(playerId);
+            }
+
+            State = DetermineState();
+        }
+    }
+
+    public void BroadcastMinesweeperCommand(string action, int cellX, int cellY, int boardSeed)
+    {
+        CoopEmbeddedRelayConnection[] connections;
+        CoopPlayerSnapshot[] snapshot;
+
+        lock (_sync)
+        {
+            if (State != RoomStateInGame)
+            {
+                return;
+            }
+
+            List<CoopEmbeddedRelayConnection> list = new List<CoopEmbeddedRelayConnection>(_connections.Values);
+            connections = list.ToArray();
+            snapshot = BuildSnapshot();
+        }
+
+        List<int> toRemove = new List<int>();
+        foreach (CoopEmbeddedRelayConnection connection in connections)
+        {
+            try
+            {
+                CoopNetworkMessage message = BuildRoomMessage("MinesweeperCommand", snapshot, connection.PlayerId);
+                message.MinesweeperAction = action ?? string.Empty;
+                message.CellX = cellX;
+                message.CellY = cellY;
+                message.BoardSeed = boardSeed;
+                connection.Send(message);
             }
             catch
             {
