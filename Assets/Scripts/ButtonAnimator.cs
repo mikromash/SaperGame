@@ -1,7 +1,7 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-using TMPro;
 
 public class ButtonAnimator : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler
 {
@@ -22,13 +22,14 @@ public class ButtonAnimator : MonoBehaviour, IPointerEnterHandler, IPointerExitH
     [Header("Visual Settings (Colors)")]
     [SerializeField] private Color normalTextColor = Color.white;
     [SerializeField] private Color hoverTextColor = Color.yellow; // Колір при наведенні
-    [SerializeField] private Color clickTextColor = Color.gray;   // Колір при натисканні
+    [SerializeField] private Color clickTextColor = Color.gray; // Колір при натисканні
     [SerializeField] private Color selectedTextColor = Color.green; // Колір, коли кнопка вибрана
 
     private Vector3 _originalScale;
     private Vector3 _targetScale;
     private bool _isHovering;
     private bool _isSelected;
+    private bool _isInitialized;
 
     private void Awake()
     {
@@ -39,6 +40,17 @@ public class ButtonAnimator : MonoBehaviour, IPointerEnterHandler, IPointerExitH
         if (buttonText == null) buttonText = GetComponentInChildren<TMP_Text>();
 
         RefreshVisuals();
+        _isInitialized = true;
+    }
+
+    private void OnEnable()
+    {
+        ResetPointerState();
+    }
+
+    private void OnDisable()
+    {
+        ResetPointerState();
     }
 
     private void Update()
@@ -57,30 +69,41 @@ public class ButtonAnimator : MonoBehaviour, IPointerEnterHandler, IPointerExitH
         if (_isSelected)
         {
             SetVisuals(selectedSprite, selectedTextColor);
+            return;
+        }
+// Якщо мишка зараз над кнопкою, але вона не вибрана — показуємо ховер-ефект
+
+        if (_isHovering)
+        {
+            SetVisuals(hoverSprite, hoverTextColor);
         }
         else
         {
-            // Якщо мишка зараз над кнопкою, але вона не вибрана — показуємо ховер-ефект
-            if (_isHovering)
-                SetVisuals(hoverSprite, hoverTextColor);
-            else
-                SetVisuals(normalSprite, normalTextColor);
+            SetVisuals(normalSprite, normalTextColor);
         }
     }
 
     public void OnPointerEnter(PointerEventData eventData)
     {
         _isHovering = true;
-        if (_isSelected) return; // Якщо вибрано, не міняємо візуал на ховер
+        // Якщо вибрано, не міняємо візуал на ховер
+        if (_isSelected)
+        {
+            return;
+        }
 
         _targetScale = _originalScale * hoverScale;
         SetVisuals(hoverSprite, hoverTextColor);
+        AudioController.Play(AudioEvent.UiHover);
     }
 
     public void OnPointerExit(PointerEventData eventData)
     {
         _isHovering = false;
-        if (_isSelected) return;
+        if (_isSelected)
+        {
+            return;
+        }
 
         _targetScale = _originalScale;
         SetVisuals(normalSprite, normalTextColor);
@@ -88,16 +111,24 @@ public class ButtonAnimator : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 
     public void OnPointerDown(PointerEventData eventData)
     {
-        if (_isSelected) return;
+        if (_isSelected)
+        {
+            return;
+        }
+// Міняємо колір тексту на "клік"
+
         _targetScale = _originalScale * clickScale;
-        SetVisuals(hoverSprite, clickTextColor); // Міняємо колір тексту на "клік"
+        SetVisuals(hoverSprite, clickTextColor);
     }
 
     public void OnPointerUp(PointerEventData eventData)
     {
-        if (_isSelected) return;
+        if (_isSelected)
+        {
+            return;
+        }
+
         _targetScale = _isHovering ? _originalScale * hoverScale : _originalScale;
-        
         // Повертаємо візуал до ховеру або нормального стану
         RefreshVisuals();
     }
@@ -106,5 +137,18 @@ public class ButtonAnimator : MonoBehaviour, IPointerEnterHandler, IPointerExitH
     {
         if (buttonImage != null && sprite != null) buttonImage.sprite = sprite;
         if (buttonText != null) buttonText.color = color;
+    }
+
+    private void ResetPointerState()
+    {
+        if (!_isInitialized)
+        {
+            return;
+        }
+
+        _isHovering = false;
+        _targetScale = _originalScale;
+        transform.localScale = _originalScale;
+        RefreshVisuals();
     }
 }

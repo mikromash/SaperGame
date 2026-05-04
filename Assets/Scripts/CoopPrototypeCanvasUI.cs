@@ -27,6 +27,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     [SerializeField] private Slider bgSoundsSlider;
     [SerializeField] private Slider interactionSoundsSlider;
     [SerializeField] private Slider volumeSlider;
+    [SerializeField] private TMP_Dropdown screenModeDropdown;
     [SerializeField] private Button settingsBackButton; 
 
     [Header("3. Connection Type")]
@@ -40,6 +41,8 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     [SerializeField] private TMP_Text createStatusText;    
     [SerializeField] private TMP_Text createModeLabelText; 
     [SerializeField] private TMP_InputField createPlayerNameInput;
+    [SerializeField] private TMP_InputField createLocalHostAddressInput;
+    [SerializeField] private TMP_InputField createPortInput;
     [SerializeField] private TMP_InputField createRoomNameInput;   
     [SerializeField] private TMP_InputField createRoomCodeInput;   
     [SerializeField] private TMP_InputField createPasswordInput;
@@ -52,6 +55,8 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     [SerializeField] private TMP_Text joinStatusText;      
     [SerializeField] private TMP_Text joinModeLabelText;
     [SerializeField] private TMP_InputField joinPlayerNameInput;
+    [SerializeField] private TMP_InputField joinLocalHostAddressInput;
+    [SerializeField] private TMP_InputField joinPortInput;
     [SerializeField] private TMP_InputField joinRoomCodeInput;     
     [SerializeField] private TMP_InputField joinPasswordInput;     
     [SerializeField] private Button connectButton;
@@ -80,6 +85,9 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
 
     private void Awake()
     {
+        CoopAudioSettings.Apply();
+        CoopUserSettings.ApplyAll();
+        RefreshSettingsControls();
         BindListeners();
         InitializeToggles(); 
     }
@@ -159,6 +167,61 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         {
             RefreshDynamicFields();
         }
+
+        if (window == MenuWindow.Settings)
+        {
+            RefreshSettingsControls();
+        }
+    }
+
+    private void RefreshSettingsControls()
+    {
+        RefreshAudioSliders();
+        RefreshScreenModeDropdown();
+    }
+
+    private void RefreshAudioSliders()
+    {
+        if (bgSoundsSlider != null)
+        {
+            bgSoundsSlider.SetValueWithoutNotify(CoopAudioSettings.MusicVolume);
+        }
+
+        if (interactionSoundsSlider != null)
+        {
+            interactionSoundsSlider.SetValueWithoutNotify(CoopAudioSettings.InteractionVolume);
+        }
+
+        if (volumeSlider != null)
+        {
+            volumeSlider.SetValueWithoutNotify(CoopAudioSettings.MasterVolume);
+        }
+    }
+
+    private void RefreshScreenModeDropdown()
+    {
+        if (screenModeDropdown == null)
+        {
+            return;
+        }
+
+        bool needsOptions =
+            screenModeDropdown.options.Count != 2 ||
+            screenModeDropdown.options[0].text != "Windowed" ||
+            screenModeDropdown.options[1].text != "Fullscreen";
+
+        if (needsOptions)
+        {
+            screenModeDropdown.ClearOptions();
+            screenModeDropdown.AddOptions(new System.Collections.Generic.List<string>
+            {
+                "Windowed",
+                "Fullscreen"
+            });
+        }
+
+        screenModeDropdown.SetValueWithoutNotify((int)CoopUserSettings.ScreenMode);
+        screenModeDropdown.RefreshShownValue();
     }
 
     private void RefreshDynamicFields()
@@ -174,13 +237,31 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
             joinModeLabelText.text = isLocal ? "Mode: Local (Connect to Room)" : "Mode: Online (Connect to Room)";
 
         SetActive(createRoomNameInput, !isLocal);  
+        SetActive(createLocalHostAddressInput, isLocal);
+        SetActive(createPortInput, isLocal);
         SetActive(createRoomCodeInput, isLocal);   
         SetActive(publicRoomToggle, !isLocal);     
         SetActive(passwordRoomToggle, !isLocal);
 
+        SetActive(joinLocalHostAddressInput, isLocal);
+        SetActive(joinPortInput, isLocal);
         SetActive(joinPasswordInput, !isLocal);
 
+        RefreshConnectionFields();
         UpdatePasswordVisibility();
+    }
+
+    private void RefreshConnectionFields()
+    {
+        if (_controller == null)
+        {
+            return;
+        }
+
+        SetInputTextWithoutNotify(createLocalHostAddressInput, _controller.LocalHostAddress);
+        SetInputTextWithoutNotify(joinLocalHostAddressInput, _controller.LocalHostAddress);
+        SetInputTextWithoutNotify(createPortInput, _controller.PortText);
+        SetInputTextWithoutNotify(joinPortInput, _controller.PortText);
     }
 
     private void UpdatePasswordVisibility()
@@ -262,35 +343,67 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         ButtonAnimator onlineAnim = onlineConnButton != null ? onlineConnButton.GetComponent<ButtonAnimator>() : null;
 
         BindButton(localConnButton, () => {
+            AudioController.Play(AudioEvent.UiClick);
             _controller?.SelectLocalScenario();
             if (localAnim) localAnim.SetSelected(true);
             if (onlineAnim) onlineAnim.SetSelected(false);
         });
 
         BindButton(onlineConnButton, () => {
+            AudioController.Play(AudioEvent.UiClick);
             _controller?.SelectNetworkScenario();
             if (onlineAnim) onlineAnim.SetSelected(true);
             if (localAnim) localAnim.SetSelected(false);
         });
 
-        BindButton(playButton, () => ChangeWindow(MenuWindow.ConnectionType));
-        BindButton(settingsMenuButton, () => ChangeWindow(MenuWindow.Settings));
+        BindButton(playButton, () => {
+            AudioController.Play(AudioEvent.UiConfirm);
+            ChangeWindow(MenuWindow.ConnectionType);
+        });
+        BindButton(settingsMenuButton, () => {
+            AudioController.Play(AudioEvent.UiConfirm);
+            ChangeWindow(MenuWindow.Settings);
+        });
         BindButton(quitButton, Application.Quit);
 
-        BindButton(settingsBackButton, () => ChangeWindow(MenuWindow.Main));
-        BindButton(createRoomModeButton, () => ChangeWindow(MenuWindow.Create));
-        BindButton(connectRoomModeButton, () => ChangeWindow(MenuWindow.Join));
-        BindButton(connTypeBackButton, () => ChangeWindow(MenuWindow.Main));
+        BindButton(settingsBackButton, () => {
+            AudioController.Play(AudioEvent.UiBack);
+            ChangeWindow(MenuWindow.Main);
+        });
+        BindButton(createRoomModeButton, () => {
+            AudioController.Play(AudioEvent.UiConfirm);
+            ChangeWindow(MenuWindow.Create);
+        });
+        BindButton(connectRoomModeButton, () => {
+            AudioController.Play(AudioEvent.UiConfirm);
+            ChangeWindow(MenuWindow.Join);
+        });
+        BindButton(connTypeBackButton, () => {
+            AudioController.Play(AudioEvent.UiBack);
+            ChangeWindow(MenuWindow.Main);
+        });
 
         BindButton(startRoomButton, OnStartRoomClicked);
-        BindButton(createBackButton, () => ChangeWindow(MenuWindow.ConnectionType));
+        BindButton(createBackButton, () => {
+            AudioController.Play(AudioEvent.UiBack);
+            ChangeWindow(MenuWindow.ConnectionType);
+        });
 
         BindButton(connectButton, OnJoinRoomClicked);
-        BindButton(joinBackButton, () => ChangeWindow(MenuWindow.ConnectionType));
+        BindButton(joinBackButton, () => {
+            AudioController.Play(AudioEvent.UiBack);
+            ChangeWindow(MenuWindow.ConnectionType);
+        });
 
         // Логіка кнопок вікна очікування
-        BindButton(waitingRoomStartButton, () => _controller?.TryStartGameFromUi()); 
-        BindButton(waitingRoomExitButton, () => _controller?.DisconnectAndReturnToMenu());
+        BindButton(waitingRoomStartButton, () => {
+            AudioController.Play(AudioEvent.GameStarted);
+            _controller?.TryStartGameFromUi();
+        }); 
+        BindButton(waitingRoomExitButton, () => {
+            AudioController.Play(AudioEvent.UiCancel);
+            _controller?.DisconnectAndReturnToMenu();
+        });
 
         // Збереження оригінального тексту кнопки копіювання
         if (waitingRoomCopyButtonText != null)
@@ -302,17 +415,36 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
             if (_controller != null && !string.IsNullOrEmpty(_controller.RoomCode))
             {
                 GUIUtility.systemCopyBuffer = _controller.RoomCode;
+                AudioController.Play(AudioEvent.UiCopy);
                 StartCoroutine(CopyButtonConfirmationRoutine()); 
             }
         });
 
-        if (bgSoundsSlider) bgSoundsSlider.onValueChanged.AddListener(v => Debug.Log("BG Vol: " + v));
-        if (interactionSoundsSlider) interactionSoundsSlider.onValueChanged.AddListener(v => Debug.Log("Int Vol: " + v));
-        if (volumeSlider) volumeSlider.onValueChanged.AddListener(v => Debug.Log("Master Vol: " + v));
+        if (bgSoundsSlider) bgSoundsSlider.onValueChanged.AddListener(v => {
+            CoopAudioSettings.SetMusicVolume(v);
+            AudioController.Play(AudioEvent.UiSlider);
+        });
+        if (interactionSoundsSlider) interactionSoundsSlider.onValueChanged.AddListener(v => {
+            CoopAudioSettings.SetInteractionVolume(v);
+            AudioController.Play(AudioEvent.UiSlider);
+        });
+        if (volumeSlider) volumeSlider.onValueChanged.AddListener(v => {
+            CoopAudioSettings.SetMasterVolume(v);
+            AudioController.Play(AudioEvent.UiSlider);
+        });
+
+        if (screenModeDropdown != null)
+        {
+            screenModeDropdown.onValueChanged.AddListener(v => {
+                CoopUserSettings.SetScreenMode((CoopScreenMode)v);
+                AudioController.Play(AudioEvent.UiToggle);
+            });
+        }
 
         if (publicRoomToggle != null)
         {
             publicRoomToggle.onValueChanged.AddListener((isOn) => {
+                AudioController.Play(AudioEvent.UiToggle);
                 if (isOn && passwordRoomToggle != null) passwordRoomToggle.isOn = false;
             });
         }
@@ -320,6 +452,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         if (passwordRoomToggle != null)
         {
             passwordRoomToggle.onValueChanged.AddListener((isOn) => {
+                AudioController.Play(AudioEvent.UiToggle);
                 if (isOn && publicRoomToggle != null) publicRoomToggle.isOn = false;
                 UpdatePasswordVisibility();
             });
@@ -342,6 +475,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         {
             waitingRoomCopyButtonText.text = _originalCopyButtonText;
         }
+
     }
 
     // --- ЛОГІКА МЕРЕЖІ ---
@@ -349,12 +483,15 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     private void OnStartRoomClicked()
     {
         if (_controller == null) return;
+        AudioController.Play(AudioEvent.UiConfirm);
 
         _controller.SetPlayerName(createPlayerNameInput != null ? createPlayerNameInput.text : "Player");
         _controller.SetRoomPassword(createPasswordInput != null ? createPasswordInput.text : "");
         
         if (_controller.IsLocalScenario)
         {
+            _controller.SetLocalHostAddress(createLocalHostAddressInput != null ? createLocalHostAddressInput.text : _controller.LocalHostAddress);
+            _controller.SetPortText(createPortInput != null ? createPortInput.text : _controller.PortText);
             _controller.SetRoomCode(createRoomCodeInput != null ? createRoomCodeInput.text : "");
             _controller.SetPrivateRoom(false); 
         }
@@ -370,8 +507,15 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     private void OnJoinRoomClicked()
     {
         if (_controller == null) return;
+        AudioController.Play(AudioEvent.UiConfirm);
 
         _controller.SetPlayerName(joinPlayerNameInput != null ? joinPlayerNameInput.text : "Player");
+        if (_controller.IsLocalScenario)
+        {
+            _controller.SetLocalHostAddress(joinLocalHostAddressInput != null ? joinLocalHostAddressInput.text : _controller.LocalHostAddress);
+            _controller.SetPortText(joinPortInput != null ? joinPortInput.text : _controller.PortText);
+        }
+
         _controller.SetRoomCode(joinRoomCodeInput != null ? joinRoomCodeInput.text : "");
         _controller.SetRoomPassword(joinPasswordInput != null ? joinPasswordInput.text : "");
         
@@ -385,6 +529,20 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         if (button != null && callback != null)
         {
             button.onClick.AddListener(callback);
+        }
+    }
+
+    private static void SetInputTextWithoutNotify(TMP_InputField input, string value)
+    {
+        if (input == null)
+        {
+            return;
+        }
+
+        string safeValue = value ?? string.Empty;
+        if (input.text != safeValue)
+        {
+            input.SetTextWithoutNotify(safeValue);
         }
     }
 

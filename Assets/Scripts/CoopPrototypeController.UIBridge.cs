@@ -37,6 +37,9 @@ public sealed partial class CoopPrototypeController
     public bool IsHost => _isHost;
     public bool CanStartGame => _canStartGame;
     public string PingDisplay => GetPingDisplayText();
+    public CoopScreenMode ScreenMode => CoopUserSettings.ScreenMode;
+    public bool ShowPing => CoopUserSettings.ShowPing;
+    public float MouseSensitivity => CoopUserSettings.MouseSensitivity;
 
     public void AttachCanvasUi()
     {
@@ -107,14 +110,27 @@ public sealed partial class CoopPrototypeController
 
     public void SetFullscreenMode()
     {
-        Screen.fullScreen = true;
-        Screen.fullScreenMode = FullScreenMode.FullScreenWindow;
+        CoopUserSettings.SetScreenMode(CoopScreenMode.Fullscreen);
     }
 
     public void SetWindowedMode()
     {
-        Screen.fullScreenMode = FullScreenMode.Windowed;
-        Screen.fullScreen = false;
+        CoopUserSettings.SetScreenMode(CoopScreenMode.Windowed);
+    }
+
+    public void SetScreenMode(CoopScreenMode mode)
+    {
+        CoopUserSettings.SetScreenMode(mode);
+    }
+
+    public void SetShowPing(bool value)
+    {
+        CoopUserSettings.SetShowPing(value);
+    }
+
+    public void SetMouseSensitivity(float value)
+    {
+        CoopUserSettings.SetMouseSensitivity(value);
     }
 
     public void SetPlayerName(string value)

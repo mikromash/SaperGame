@@ -189,6 +189,7 @@ namespace Minesweeper
         {
             if (!CanOpenCell(cell))
             {
+                AudioController.Play(AudioEvent.CellBlocked);
                 return;
             }
 
@@ -197,6 +198,7 @@ namespace Minesweeper
 
             if (cell.hasBomb)
             {
+                AudioController.PlayAt(AudioEvent.BombExplode, _gridView != null ? _gridView.transform.position : transform.position);
                 GameOver();
                 return;
             }
@@ -204,6 +206,11 @@ namespace Minesweeper
             if (cell.neighbourBombs == 0)
             {
                 _floodFillSystem.FloodOpen(cell);
+                AudioController.Play(AudioEvent.CellOpenEmpty);
+            }
+            else
+            {
+                AudioController.Play(AudioEvent.CellOpen);
             }
 
             _gridView.RefreshAllViews();
@@ -222,6 +229,7 @@ namespace Minesweeper
             }
 
             cell.isFlagged = !cell.isFlagged;
+            AudioController.Play(cell.isFlagged ? AudioEvent.CellFlagOn : AudioEvent.CellFlagOff);
             _gridView.RefreshAllViews();
         }
 
@@ -254,6 +262,7 @@ namespace Minesweeper
 
         private void RestartGameInternal(int seed)
         {
+            bool hadGrid = _grid != null;
             _isGameFinished = false;
             CoopPrototypeController.Instance?.ResetPlayersToMinesweeperStart();
             _gridGenerator = new GridGenerator(GridWidth, GridHeight, BombCount, seed);
@@ -263,6 +272,12 @@ namespace Minesweeper
             _gridView.Build(_grid, CellSize);
             _gridView.SetRevealBombs(false);
             _uiController.HideState();
+
+            if (hadGrid)
+            {
+                AudioController.Play(AudioEvent.GameRestart);
+                AudioController.PlayMusicTrack(MusicTrack.Gameplay);
+            }
         }
 
         private Cell GetCell(int x, int y)
@@ -302,10 +317,14 @@ namespace Minesweeper
 
             if (isWin)
             {
+                AudioController.Play(AudioEvent.GameWin);
+                AudioController.PlayMusicTrack(MusicTrack.Win);
                 _uiController.ShowWin();
             }
             else
             {
+                AudioController.Play(AudioEvent.GameLose);
+                AudioController.PlayMusicTrack(MusicTrack.Lose);
                 _uiController.ShowLose();
             }
         }

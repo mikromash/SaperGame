@@ -342,7 +342,10 @@ public sealed partial class CoopPrototypeController
         GUILayout.Label("Room code: " + _roomCode);
         GUILayout.Label("Access: " + (_isPrivateRoom ? "Password protected" : "Public"));
         GUILayout.Label("Player id: " + _localPlayerId);
-        GUILayout.Label("Ping: " + GetPingDisplayText());
+        if (CoopUserSettings.ShowPing)
+        {
+            GUILayout.Label("Ping: " + GetPingDisplayText());
+        }
         GUILayout.Label("Move: WASD / arrows");
         GUILayout.Label("Status: " + _status, WrapLabelStyle());
 
@@ -362,7 +365,7 @@ public sealed partial class CoopPrototypeController
         DrawModalBackdrop();
 
         float width = 380f;
-        float height = _isSettingsMenuOpen ? 320f : 260f;
+        float height = _isSettingsMenuOpen ? 560f : 260f;
         Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
 
         GUI.Box(panel, "Pause");
@@ -376,22 +379,26 @@ public sealed partial class CoopPrototypeController
         {
             if (GUILayout.Button("Resume", GUILayout.Height(38f)))
             {
+                AudioController.Play(AudioEvent.PauseClose);
                 ResumeGameplay();
             }
 
             if (GUILayout.Button("Window Settings", GUILayout.Height(38f)))
             {
+                AudioController.Play(AudioEvent.UiConfirm);
                 _isSettingsMenuOpen = true;
             }
 
             if (GUILayout.Button("Leave Room", GUILayout.Height(38f)))
             {
+                AudioController.Play(AudioEvent.UiCancel);
                 ShutdownSession();
                 ResetToMenu();
             }
 
             if (GUILayout.Button("Exit Game", GUILayout.Height(38f)))
             {
+                AudioController.Play(AudioEvent.UiCancel);
                 ExitGame();
             }
         }
@@ -402,24 +409,45 @@ public sealed partial class CoopPrototypeController
     private void DrawPauseSettings()
     {
         // Простейшие оконные настройки, доступные прямо из паузы.
+        CoopAudioSettings.Apply();
+
+        GUILayout.Label("Audio");
+        GUILayout.Space(8f);
+
+        float masterVolume = DrawVolumeSlider("Master", CoopAudioSettings.MasterVolume);
+        if (!Mathf.Approximately(masterVolume, CoopAudioSettings.MasterVolume))
+        {
+            CoopAudioSettings.SetMasterVolume(masterVolume);
+        }
+
+        float musicVolume = DrawVolumeSlider("Background", CoopAudioSettings.MusicVolume);
+        if (!Mathf.Approximately(musicVolume, CoopAudioSettings.MusicVolume))
+        {
+            CoopAudioSettings.SetMusicVolume(musicVolume);
+        }
+
+        float interactionVolume = DrawVolumeSlider("Interaction", CoopAudioSettings.InteractionVolume);
+        if (!Mathf.Approximately(interactionVolume, CoopAudioSettings.InteractionVolume))
+        {
+            CoopAudioSettings.SetInteractionVolume(interactionVolume);
+        }
+
+        GUILayout.Space(16f);
         GUILayout.Label("Window mode");
         GUILayout.Space(10f);
 
-        if (GUILayout.Button("Fullscreen", GUILayout.Height(38f)))
-        {
-            Screen.fullScreen = true;
-            Screen.fullScreenMode = FullScreenMode.FullScreenWindow;
-        }
+        DrawScreenModeSettings();
 
-        if (GUILayout.Button("Windowed", GUILayout.Height(38f)))
-        {
-            Screen.fullScreenMode = FullScreenMode.Windowed;
-            Screen.fullScreen = false;
-        }
+        GUILayout.Space(16f);
+        DrawPingSettings();
+
+        GUILayout.Space(16f);
+        DrawMouseSensitivitySettings();
 
         GUILayout.Space(16f);
         if (GUILayout.Button("Back", GUILayout.Height(34f)))
         {
+            AudioController.Play(AudioEvent.UiBack);
             _isSettingsMenuOpen = false;
         }
     }
@@ -446,10 +474,12 @@ public sealed partial class CoopPrototypeController
         {
             if (_isSettingsMenuOpen)
             {
+                AudioController.Play(AudioEvent.UiBack);
                 _isSettingsMenuOpen = false;
             }
             else
             {
+                AudioController.Play(AudioEvent.PauseClose);
                 ResumeGameplay();
             }
 
@@ -458,6 +488,7 @@ public sealed partial class CoopPrototypeController
 
         _isPauseMenuOpen = true;
         _isSettingsMenuOpen = false;
+        AudioController.Play(AudioEvent.PauseOpen);
     }
 
     private void ResumeGameplay()
@@ -484,5 +515,70 @@ public sealed partial class CoopPrototypeController
         GUIStyle style = new GUIStyle(GUI.skin.label);
         style.wordWrap = true;
         return style;
+    }
+
+    private static float DrawVolumeSlider(string label, float value)
+    {
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(label, GUILayout.Width(100f));
+        float newValue = GUILayout.HorizontalSlider(value, 0f, 1f, GUILayout.Width(160f));
+        GUILayout.Label(Mathf.RoundToInt(newValue * 100f) + "%", GUILayout.Width(48f));
+        GUILayout.EndHorizontal();
+        return newValue;
+    }
+
+    private static void DrawScreenModeSettings()
+    {
+        GUILayout.Label("Current: " + CoopUserSettings.GetScreenModeLabel());
+
+        GUILayout.BeginHorizontal();
+        bool isWindowed = CoopUserSettings.ScreenMode == CoopScreenMode.Windowed;
+        GUI.enabled = !isWindowed;
+        if (GUILayout.Button("Windowed", GUILayout.Height(34f)))
+        {
+            AudioController.Play(AudioEvent.UiConfirm);
+            CoopUserSettings.SetScreenMode(CoopScreenMode.Windowed);
+        }
+
+        bool isFullscreen = CoopUserSettings.ScreenMode == CoopScreenMode.Fullscreen;
+        GUI.enabled = !isFullscreen;
+        if (GUILayout.Button("Fullscreen", GUILayout.Height(34f)))
+        {
+            AudioController.Play(AudioEvent.UiConfirm);
+            CoopUserSettings.SetScreenMode(CoopScreenMode.Fullscreen);
+        }
+
+        GUI.enabled = true;
+        GUILayout.EndHorizontal();
+    }
+
+    private static void DrawPingSettings()
+    {
+        bool showPing = GUILayout.Toggle(CoopUserSettings.ShowPing, "Show ping");
+        if (showPing != CoopUserSettings.ShowPing)
+        {
+            AudioController.Play(AudioEvent.UiToggle);
+            CoopUserSettings.SetShowPing(showPing);
+        }
+    }
+
+    private static void DrawMouseSensitivitySettings()
+    {
+        GUILayout.Label("Mouse sensitivity");
+
+        GUILayout.BeginHorizontal();
+        float sensitivity = GUILayout.HorizontalSlider(
+            CoopUserSettings.MouseSensitivity,
+            CoopUserSettings.MinMouseSensitivity,
+            CoopUserSettings.MaxMouseSensitivity,
+            GUILayout.Width(210f));
+
+        GUILayout.Label(sensitivity.ToString("0.00"), GUILayout.Width(48f));
+        GUILayout.EndHorizontal();
+
+        if (!Mathf.Approximately(sensitivity, CoopUserSettings.MouseSensitivity))
+        {
+            CoopUserSettings.SetMouseSensitivity(sensitivity);
+        }
     }
 }

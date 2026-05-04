@@ -19,6 +19,8 @@ public class PlayerMovement : MonoBehaviour
     private Vector3 velocity;
     private bool isSprinting;
     private bool isGrounded;
+    private bool wasGrounded;
+    private bool hasGroundState;
 
     private void Awake()
     {
@@ -38,7 +40,14 @@ public class PlayerMovement : MonoBehaviour
 
     private void Update()
     {
+        wasGrounded = isGrounded;
         isGrounded = controller.isGrounded;
+        if (hasGroundState && !wasGrounded && isGrounded)
+        {
+            AudioController.PlayAt(AudioEvent.PlayerLand, transform.position);
+        }
+        hasGroundState = true;
+
         if (isGrounded && velocity.y < 0) velocity.y = -2f;
 
         MovePlayer();
@@ -72,6 +81,7 @@ public class PlayerMovement : MonoBehaviour
         if (isGrounded)
         {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+            AudioController.PlayAt(AudioEvent.PlayerJump, transform.position);
         }
     }
 

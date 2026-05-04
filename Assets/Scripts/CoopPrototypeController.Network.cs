@@ -5,12 +5,14 @@ public sealed partial class CoopPrototypeController
         // Создание комнаты поднимает локальный relay при необходимости и открывает host-сессию.
         if (!TryParsePort(out int port))
         {
+            AudioController.Play(AudioEvent.UiError);
             _status = "Relay port must be a number between 1 and 65535.";
             return;
         }
 
         if (string.IsNullOrWhiteSpace(GetSelectedRelayHost()))
         {
+            AudioController.Play(AudioEvent.UiError);
             _status = "Host address is required.";
             return;
         }
@@ -25,6 +27,7 @@ public sealed partial class CoopPrototypeController
 
         if (_scenario == ConnectionScenario.Network && _isPrivateRoom && string.IsNullOrWhiteSpace(roomPassword))
         {
+            AudioController.Play(AudioEvent.UiError);
             _status = "Private network rooms require a password.";
             return;
         }
@@ -39,6 +42,7 @@ public sealed partial class CoopPrototypeController
             }
             catch (System.Exception exception)
             {
+                AudioController.Play(AudioEvent.UiError);
                 _status = "Could not start local relay on port " + port + ": " + exception.Message;
                 _localRelayServer = null;
                 return;
@@ -56,6 +60,7 @@ public sealed partial class CoopPrototypeController
 
         if (!connected)
         {
+            AudioController.Play(AudioEvent.UiError);
             string target = GetSelectedRelayHost().Trim() + ":" + port;
             _status = string.IsNullOrWhiteSpace(_relayClient.Status)
                 ? "Could not create a room on " + target + "."
@@ -71,6 +76,7 @@ public sealed partial class CoopPrototypeController
         _isHost = true;
         _canStartGame = false;
         _status = BuildRoomStatus();
+        AudioController.Play(AudioEvent.RoomCreated);
         UnityEngine.Debug.Log($"[CoopLobby] Host created room. roomCode={_roomCode}, localPlayerId={_localPlayerId}, nextScreen={MenuScreen.WaitingRoom}, scenario={_scenario}");
         _isPauseMenuOpen = false;
         _isSettingsMenuOpen = false;
@@ -82,12 +88,14 @@ public sealed partial class CoopPrototypeController
         // Подключение к комнате выполняется через relay-клиент по существующему room code.
         if (!TryParsePort(out int port))
         {
+            AudioController.Play(AudioEvent.UiError);
             _status = "Relay port must be a number between 1 and 65535.";
             return;
         }
 
         if (string.IsNullOrWhiteSpace(GetSelectedRelayHost()))
         {
+            AudioController.Play(AudioEvent.UiError);
             _status = "Host address is required.";
             return;
         }
@@ -106,6 +114,7 @@ public sealed partial class CoopPrototypeController
 
         if (!connected)
         {
+            AudioController.Play(AudioEvent.UiError);
             string target = GetSelectedRelayHost().Trim() + ":" + port;
             _status = string.IsNullOrWhiteSpace(_relayClient.Status)
                 ? "Could not join the room on " + target + "."
@@ -120,6 +129,7 @@ public sealed partial class CoopPrototypeController
         _isHost = false;
         _canStartGame = false;
         _status = BuildRoomStatus();
+        AudioController.Play(AudioEvent.RoomJoined);
         UnityEngine.Debug.Log($"[CoopLobby] Guest joined room. roomCode={_roomCode}, localPlayerId={_localPlayerId}, nextScreen={MenuScreen.WaitingRoom}, scenario={_scenario}");
         _isPauseMenuOpen = false;
         _isSettingsMenuOpen = false;
@@ -131,6 +141,7 @@ public sealed partial class CoopPrototypeController
         // Старт матча разрешен только хосту и только когда второй игрок уже подключился.
         if (_relayClient == null)
         {
+            AudioController.Play(AudioEvent.UiError);
             _status = "\u041d\u0435\u0442 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0433\u043e \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f \u043a \u043a\u043e\u043c\u043d\u0430\u0442\u0435.";
             UnityEngine.Debug.LogWarning("[CoopLobby] StartGame ignored because relay client is null.");
             return;
@@ -138,6 +149,7 @@ public sealed partial class CoopPrototypeController
 
         if (!_isHost)
         {
+            AudioController.Play(AudioEvent.UiError);
             _status = "\u0422\u043e\u043b\u044c\u043a\u043e \u0445\u043e\u0441\u0442 \u043c\u043e\u0436\u0435\u0442 \u043d\u0430\u0447\u0430\u0442\u044c \u0438\u0433\u0440\u0443.";
             UnityEngine.Debug.LogWarning($"[CoopLobby] StartGame rejected for non-host playerId={_localPlayerId}.");
             return;
@@ -145,12 +157,14 @@ public sealed partial class CoopPrototypeController
 
         if (!_canStartGame)
         {
+            AudioController.Play(AudioEvent.UiError);
             _status = "\u0412\u0442\u043e\u0440\u043e\u0439 \u0438\u0433\u0440\u043e\u043a \u0435\u0449\u0451 \u043d\u0435 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u043b\u0441\u044f.";
             UnityEngine.Debug.LogWarning($"[CoopLobby] StartGame blocked because canStartGame=false. roomCode={_roomCode}, roomState={_roomState}");
             return;
         }
 
         UnityEngine.Debug.Log($"[CoopLobby] Host requested game start. roomCode={_roomCode}, roomState={_roomState}, playerId={_localPlayerId}");
+        AudioController.Play(AudioEvent.GameStarted);
         _relayClient.SendStartGameRequest();
         _status = "\u0417\u0430\u043f\u0443\u0441\u043a \u043c\u0430\u0442\u0447\u0430...";
     }

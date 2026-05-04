@@ -114,9 +114,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
         Application.runInBackground = true;
         Application.targetFrameRate = 60;
         QualitySettings.vSyncCount = 0;
-        Screen.fullScreenMode = FullScreenMode.Windowed;
-        Screen.fullScreen = false;
-        Screen.SetResolution(1280, 720, FullScreenMode.Windowed);
+        CoopUserSettings.ApplyAll();
         ApplyRelaySettings();
         SceneManager.sceneLoaded += HandleSceneLoaded;
         SceneManager.activeSceneChanged += HandleActiveSceneChanged;
@@ -196,6 +194,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
                 UpdateRoomPresence(message);
                 ApplySnapshot(message.Players);
                 _status = "Match started.";
+                AudioController.Play(AudioEvent.GameStarted);
                 Debug.Log($"[CoopLobby] GameStarted received. roomCode={_roomCode}, playerId={_localPlayerId}");
                 TransitionToGameplayScene();
                 continue;
@@ -218,6 +217,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
             if (message.Type == "RoomClosed")
             {
                 _status = string.IsNullOrWhiteSpace(message.Reason) ? "Room closed." : message.Reason;
+                AudioController.Play(AudioEvent.RoomClosed);
                 ShutdownSession();
                 ResetToMenu();
                 return;
@@ -226,6 +226,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
             if (message.Type == "Error")
             {
                 _status = string.IsNullOrWhiteSpace(message.Reason) ? "Relay server returned an error." : message.Reason;
+                AudioController.Play(AudioEvent.UiError);
                 Debug.LogWarning("[CoopLobby] Relay error: " + _status);
             }
         }
@@ -234,6 +235,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
             (_screen == MenuScreen.InGame || _screen == MenuScreen.WaitingRoom))
         {
             _status = string.IsNullOrWhiteSpace(_relayClient.DisconnectStatus) ? "Connection closed." : _relayClient.DisconnectStatus;
+            AudioController.Play(AudioEvent.RoomClosed);
             ShutdownSession();
             ResetToMenu();
         }
@@ -332,6 +334,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
 
     private void UpdateRoomPresence(CoopNetworkMessage message)
     {
+        string previousRoomState = _roomState;
         // Сетевое сообщение комнаты обновляет локальный снимок состояния UI и роли игрока.
         _roomCode = SanitizeRoomCode(message.RoomCode);
         _connectedRoomName = SanitizeRoomName(message.RoomName);
@@ -347,6 +350,12 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
         }
 
         _status = BuildRoomStatus();
+        if (!string.Equals(previousRoomState, _roomState, System.StringComparison.Ordinal) &&
+            string.Equals(_roomState, "player_joined", System.StringComparison.Ordinal))
+        {
+            AudioController.Play(AudioEvent.PlayerJoined);
+        }
+
         Debug.Log($"[CoopLobby] Room presence updated. screen={_screen}, state={_roomState}, roomCode={_roomCode}, isHost={_isHost}, canStart={_canStartGame}, playerId={_localPlayerId}");
     }
 
