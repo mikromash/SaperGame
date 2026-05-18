@@ -8,7 +8,6 @@ namespace Minesweeper
     {
         private static readonly Color ClosedColor = new Color(0.23f, 0.27f, 0.33f);
         private static readonly Color OpenedColor = new Color(0.78f, 0.8f, 0.83f);
-        private static readonly Color FlaggedColor = new Color(0.82f, 0.26f, 0.24f); // Більше не використовується для фону, але залишено для сумісності
         private static readonly Color BombColor = new Color(0.1f, 0.1f, 0.1f);
         private static readonly Color EmptyTextColor = new Color(0f, 0f, 0f, 0f);
         private static readonly Color[] NumberColors =
@@ -28,7 +27,7 @@ namespace Minesweeper
         private Renderer _renderer;
         private Material _materialInstance;
         private TextMeshPro _label;
-        private GameObject _flagObject; // Посилання на 3D-об'єкт прапорця
+        private GameObject _flagObject;
         private bool _revealBombs;
 
         public Cell Cell => _cell;
@@ -40,7 +39,7 @@ namespace Minesweeper
             _materialInstance = CreateCellMaterial();
             _renderer.sharedMaterial = _materialInstance;
             EnsureLabel();
-            EnsureFlagObject(); // Ініціалізуємо 3D-прапорець при створенні клітинки
+            EnsureFlagObject();
             UpdateView();
         }
 
@@ -60,8 +59,6 @@ namespace Minesweeper
             bool showNumber = _cell.isOpened && !_cell.hasBomb && _cell.neighbourBombs > 0;
             bool showFlag = !_cell.isOpened && _cell.isFlagged;
 
-            // Керуємо видимістю 3D-моделі прапорця.
-            // Прапорець показується тільки якщо він встановлений і ми зараз не показуємо бомбу (кінець гри).
             if (_flagObject != null)
             {
                 _flagObject.SetActive(showFlag && !showBomb);
@@ -92,8 +89,6 @@ namespace Minesweeper
                 return;
             }
 
-            // Якщо клітинка закрита (з флажком або без), вона має стандартний вигляд.
-            // Текст "F" та зафарбування у FlaggedColor більше не використовуються.
             _materialInstance.color = ClosedColor;
             _label.text = string.Empty;
             _label.color = EmptyTextColor;
@@ -101,16 +96,9 @@ namespace Minesweeper
 
         private static Material CreateCellMaterial()
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Universal Render Pipeline/Simple Lit");
-            }
-
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit") 
+                         ?? Shader.Find("Universal Render Pipeline/Simple Lit") 
+                         ?? Shader.Find("Standard");
 
             return new Material(shader);
         }
@@ -144,7 +132,6 @@ namespace Minesweeper
             _label.transform.localScale = Vector3.one * 0.25f;
         }
 
-        // Метод для завантаження та створення 3D-об'єкта прапорця
         private void EnsureFlagObject()
         {
             if (_flagObject != null)
@@ -156,7 +143,6 @@ namespace Minesweeper
 
             if (flagTransform == null)
             {
-                // Завантажуємо префаб з папки Resources
                 GameObject loadedPrefab = Resources.Load<GameObject>("FlagPrefab");
                 
                 if (loadedPrefab != null)
@@ -164,22 +150,30 @@ namespace Minesweeper
                     _flagObject = Instantiate(loadedPrefab, transform, false);
                     _flagObject.name = "Flag";
 
-                    // --- ВИПРАВЛЕННЯ СПЛЮЩЕННЯ ---
-                    // Отримуємо глобальний масштаб клітинки
-                    Vector3 parentScale = transform.lossyScale; 
+                    // =========================================================
+                    // 1. НАЛАШТУВАННЯ ПОЗИЦІЇ (ВИСОТИ)
+                    // Змінюйте середнє значення (Y), щоб підняти або опустити прапорець
+                    // =========================================================
+                    Vector3 flagPositionOffset = new Vector3(0f, 0f, 0f); 
+                    _flagObject.transform.localPosition = flagPositionOffset;
+
+
+                    // =========================================================
+                    // 2. НАЛАШТУВАННЯ РОЗМІРУ (МАСШТАБУ)
+                    // Змінюйте цей множник, щоб зробити прапорець більшим або меншим.
+                    // Наприклад: 1.5f (більший), 0.8f (менший).
+                    // =========================================================
+                    float customScaleMultiplier = 1.0f; 
                     
-                    // Задаємо прапорцю такий локальний масштаб, який скасує вплив батька
-                    // і поверне прапорцю його оригінальні пропорції з префабу
+                    // Цей код зберігає ідеальні пропорції прапорця, попри розмір клітинки
+                    Vector3 parentScale = transform.lossyScale;
                     _flagObject.transform.localScale = new Vector3(
-                        loadedPrefab.transform.localScale.x / parentScale.x,
-                        loadedPrefab.transform.localScale.y / parentScale.y,
-                        loadedPrefab.transform.localScale.z / parentScale.z
+                        (loadedPrefab.transform.localScale.x / parentScale.x) * customScaleMultiplier,
+                        (loadedPrefab.transform.localScale.y / parentScale.y) * customScaleMultiplier,
+                        (loadedPrefab.transform.localScale.z / parentScale.z) * customScaleMultiplier
                     );
+                    // =========================================================
 
-                    // Налаштовуємо позицію. Після зміни масштабу можливо доведеться відредагувати це значення.
-                    _flagObject.transform.localPosition = new Vector3(0f, 2f, 0f); 
-
-                    // Видаляємо колайдер, щоб кліки мишкою доходили до самої клітинки
                     Collider flagCollider = _flagObject.GetComponent<Collider>();
                     if (flagCollider != null)
                     {
@@ -193,11 +187,9 @@ namespace Minesweeper
             }
             else
             {
-                // Якщо об'єкт 'Flag' вже існує
                 _flagObject = flagTransform.gameObject;
             }
 
-            // Ховаємо прапорець за замовчуванням
             if (_flagObject != null)
             {
                 _flagObject.SetActive(false);
