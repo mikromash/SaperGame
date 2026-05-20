@@ -6,16 +6,64 @@ namespace Minesweeper
 {
     public sealed class UIController : MonoBehaviour
     {
+        private const float RoomInfoRefreshInterval = 0.25f;
+
         private GameController _gameController;
         private Canvas _canvas;
+        private RectTransform _hudRoot;
         private TextMeshProUGUI _statusLabel;
+        private TextMeshProUGUI _roomCodeLabel;
+        private TextMeshProUGUI _roomTypeLabel;
+        private TextMeshProUGUI _roomAccessLabel;
+        private TextMeshProUGUI _roomPingLabel;
+        private TextMeshProUGUI _timerLabel;
+        private TextMeshProUGUI _flagsLabel;
+        private TextMeshProUGUI _stateLabel;
         private Button _restartButton;
+        private float _nextRoomInfoRefreshTime;
+        private int _lastElapsedSeconds = -1;
+        private int _lastFlaggedCells = -1;
+        private int _lastBombsTotal = -1;
+        private bool _lastCanToggleFlags;
+        private bool _lastGameFinished;
+        private string _lastRoomCode = string.Empty;
+        private string _lastRoomType = string.Empty;
+        private string _lastRoomAccess = string.Empty;
+        private string _lastPing = string.Empty;
+        private bool _lastShowPing;
 
         public void Init(GameController gameController)
         {
+            if (_gameController != null)
+            {
+                _gameController.HudStateChanged -= RefreshGameplayHud;
+            }
+
             _gameController = gameController;
             EnsureCanvas();
+            _gameController.HudStateChanged += RefreshGameplayHud;
+            RefreshGameplayHud();
+            RefreshRoomInfoHud(true);
             HideState();
+        }
+
+        private void Update()
+        {
+            if (_gameController == null || Time.unscaledTime < _nextRoomInfoRefreshTime)
+            {
+                return;
+            }
+
+            _nextRoomInfoRefreshTime = Time.unscaledTime + RoomInfoRefreshInterval;
+            RefreshRoomInfoHud(false);
+        }
+
+        private void OnDestroy()
+        {
+            if (_gameController != null)
+            {
+                _gameController.HudStateChanged -= RefreshGameplayHud;
+            }
         }
 
         public void ShowWin()
@@ -65,11 +113,129 @@ namespace Minesweeper
 
             _canvas = canvasObject.AddComponent<Canvas>();
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvasObject.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
             canvasObject.AddComponent<GraphicRaycaster>();
 
+            _hudRoot = CreateHudRoot(canvasObject.transform);
+            CreateRoomInfoPanel(_hudRoot);
+            CreateTimerPanel(_hudRoot);
+            CreateIndicatorsPanel(_hudRoot);
             _statusLabel = CreateStatusLabel(canvasObject.transform);
             _restartButton = CreateRestartButton(canvasObject.transform);
+        }
+
+        private RectTransform CreateHudRoot(Transform parent)
+        {
+            GameObject rootObject = new GameObject("HUDRoot");
+            rootObject.transform.SetParent(parent, false);
+
+            RectTransform rectTransform = rootObject.AddComponent<RectTransform>();
+            rectTransform.anchorMin = Vector2.zero;
+            rectTransform.anchorMax = Vector2.one;
+            rectTransform.offsetMin = Vector2.zero;
+            rectTransform.offsetMax = Vector2.zero;
+            return rectTransform;
+        }
+
+        private void CreateRoomInfoPanel(Transform parent)
+        {
+            RectTransform panel = CreateHudPanel(parent, "RoomInfoPanel", new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -18f), new Vector2(330f, 126f));
+            VerticalLayoutGroup layout = panel.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset(14, 14, 10, 10);
+            layout.spacing = 3f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+
+            ContentSizeFitter fitter = panel.gameObject.AddComponent<ContentSizeFitter>();
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            AddHudText(panel, "RoomInfoTitle", "Room", 19f, FontStyles.Bold, TextAlignmentOptions.Left);
+            _roomCodeLabel = AddHudText(panel, "RoomCode", "Code: --", 17f, FontStyles.Normal, TextAlignmentOptions.Left);
+            _roomTypeLabel = AddHudText(panel, "RoomType", "Type: --", 17f, FontStyles.Normal, TextAlignmentOptions.Left);
+            _roomAccessLabel = AddHudText(panel, "RoomAccess", "Access: --", 17f, FontStyles.Normal, TextAlignmentOptions.Left);
+            _roomPingLabel = AddHudText(panel, "RoomPing", "Ping: --", 17f, FontStyles.Normal, TextAlignmentOptions.Left);
+        }
+
+        private void CreateTimerPanel(Transform parent)
+        {
+            RectTransform panel = CreateHudPanel(parent, "TimerPanel", new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -18f), new Vector2(176f, 56f));
+            _timerLabel = AddHudText(panel, "TimerValue", "00:00", 32f, FontStyles.Bold, TextAlignmentOptions.Center);
+            StretchToParent(_timerLabel.rectTransform, Vector2.zero);
+        }
+
+        private void CreateIndicatorsPanel(Transform parent)
+        {
+            RectTransform panel = CreateHudPanel(parent, "IndicatorsPanel", new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18f, -18f), new Vector2(250f, 86f));
+            VerticalLayoutGroup layout = panel.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset(14, 14, 10, 10);
+            layout.spacing = 6f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+
+            _flagsLabel = AddHudText(panel, "Flags", "Flags: 0/0", 22f, FontStyles.Bold, TextAlignmentOptions.Right);
+            _stateLabel = AddHudText(panel, "State", "Ready", 17f, FontStyles.Normal, TextAlignmentOptions.Right);
+        }
+
+        private RectTransform CreateHudPanel(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 position, Vector2 size)
+        {
+            GameObject panelObject = new GameObject(name);
+            panelObject.transform.SetParent(parent, false);
+
+            RectTransform rectTransform = panelObject.AddComponent<RectTransform>();
+            rectTransform.anchorMin = anchorMin;
+            rectTransform.anchorMax = anchorMax;
+            rectTransform.pivot = new Vector2(anchorMin.x, anchorMin.y);
+            if (anchorMin.x >= 1f)
+            {
+                rectTransform.pivot = new Vector2(1f, anchorMin.y);
+            }
+            else if (Mathf.Approximately(anchorMin.x, 0.5f))
+            {
+                rectTransform.pivot = new Vector2(0.5f, anchorMin.y);
+            }
+
+            rectTransform.anchoredPosition = position;
+            rectTransform.sizeDelta = size;
+
+            Image image = panelObject.AddComponent<Image>();
+            image.color = new Color(0.04f, 0.05f, 0.06f, 0.72f);
+            image.raycastTarget = false;
+            return rectTransform;
+        }
+
+        private TextMeshProUGUI AddHudText(Transform parent, string name, string text, float fontSize, FontStyles style, TextAlignmentOptions alignment)
+        {
+            GameObject textObject = new GameObject(name);
+            textObject.transform.SetParent(parent, false);
+
+            RectTransform rectTransform = textObject.AddComponent<RectTransform>();
+            rectTransform.sizeDelta = new Vector2(0f, Mathf.Ceil(fontSize * 1.35f));
+
+            TextMeshProUGUI label = textObject.AddComponent<TextMeshProUGUI>();
+            label.text = text;
+            label.fontSize = fontSize;
+            label.fontStyle = style;
+            label.alignment = alignment;
+            label.color = Color.white;
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.overflowMode = TextOverflowModes.Ellipsis;
+            label.raycastTarget = false;
+            return label;
+        }
+
+        private static void StretchToParent(RectTransform rectTransform, Vector2 padding)
+        {
+            rectTransform.anchorMin = Vector2.zero;
+            rectTransform.anchorMax = Vector2.one;
+            rectTransform.offsetMin = padding;
+            rectTransform.offsetMax = -padding;
         }
 
         private TextMeshProUGUI CreateStatusLabel(Transform parent)
@@ -81,7 +247,7 @@ namespace Minesweeper
             rectTransform.anchorMin = new Vector2(0.5f, 1f);
             rectTransform.anchorMax = new Vector2(0.5f, 1f);
             rectTransform.pivot = new Vector2(0.5f, 1f);
-            rectTransform.anchoredPosition = new Vector2(0f, -24f);
+            rectTransform.anchoredPosition = new Vector2(0f, -82f);
             rectTransform.sizeDelta = new Vector2(420f, 60f);
 
             TextMeshProUGUI label = labelObject.AddComponent<TextMeshProUGUI>();
@@ -100,7 +266,7 @@ namespace Minesweeper
             rectTransform.anchorMin = new Vector2(1f, 1f);
             rectTransform.anchorMax = new Vector2(1f, 1f);
             rectTransform.pivot = new Vector2(1f, 1f);
-            rectTransform.anchoredPosition = new Vector2(-24f, -24f);
+            rectTransform.anchoredPosition = new Vector2(-18f, -116f);
             rectTransform.sizeDelta = new Vector2(170f, 46f);
 
             Image image = buttonObject.AddComponent<Image>();
@@ -126,6 +292,109 @@ namespace Minesweeper
             label.color = Color.white;
 
             return button;
+        }
+
+        private void RefreshGameplayHud()
+        {
+            if (_gameController == null)
+            {
+                return;
+            }
+
+            int elapsedSeconds = _gameController.ElapsedSeconds;
+            if (elapsedSeconds != _lastElapsedSeconds)
+            {
+                _lastElapsedSeconds = elapsedSeconds;
+                SetText(_timerLabel, FormatTime(elapsedSeconds));
+            }
+
+            int flaggedCells = _gameController.FlaggedCells;
+            int bombsTotal = _gameController.BombsTotal;
+            if (flaggedCells != _lastFlaggedCells || bombsTotal != _lastBombsTotal)
+            {
+                _lastFlaggedCells = flaggedCells;
+                _lastBombsTotal = bombsTotal;
+                SetText(_flagsLabel, $"Flags: {flaggedCells}/{bombsTotal}");
+            }
+
+            bool canToggleFlags = _gameController.CanToggleFlags;
+            bool isGameFinished = _gameController.IsGameFinished;
+            if (canToggleFlags != _lastCanToggleFlags || isGameFinished != _lastGameFinished)
+            {
+                _lastCanToggleFlags = canToggleFlags;
+                _lastGameFinished = isGameFinished;
+                SetText(_stateLabel, GetStateText());
+            }
+        }
+
+        private void RefreshRoomInfoHud(bool force)
+        {
+            CoopPrototypeController controller = CoopPrototypeController.Instance;
+            string roomCode = controller != null && !string.IsNullOrWhiteSpace(controller.RoomCode) ? controller.RoomCode : "--";
+            string roomType = controller != null ? (controller.IsLocalScenario ? "Local" : "Network") : "--";
+            string roomAccess = controller != null ? (controller.IsPrivateRoom ? "Private" : "Public") : "--";
+            bool showPing = controller != null && controller.ShowPing;
+            string ping = controller != null ? controller.PingDisplay : "--";
+
+            if (force || roomCode != _lastRoomCode)
+            {
+                _lastRoomCode = roomCode;
+                SetText(_roomCodeLabel, "Code: " + roomCode);
+            }
+
+            if (force || roomType != _lastRoomType)
+            {
+                _lastRoomType = roomType;
+                SetText(_roomTypeLabel, "Type: " + roomType);
+            }
+
+            if (force || roomAccess != _lastRoomAccess)
+            {
+                _lastRoomAccess = roomAccess;
+                SetText(_roomAccessLabel, "Access: " + roomAccess);
+            }
+
+            if (_roomPingLabel != null && (force || showPing != _lastShowPing))
+            {
+                _lastShowPing = showPing;
+                _roomPingLabel.gameObject.SetActive(showPing);
+            }
+
+            if (showPing && (force || ping != _lastPing))
+            {
+                _lastPing = ping;
+                SetText(_roomPingLabel, "Ping: " + ping);
+            }
+        }
+
+        private string GetStateText()
+        {
+            if (_gameController == null)
+            {
+                return "Ready";
+            }
+
+            if (_gameController.IsGameFinished)
+            {
+                return "Finished";
+            }
+
+            return _gameController.CanToggleFlags ? "Playing - 2 min limit" : "Flags locked";
+        }
+
+        private static string FormatTime(int totalSeconds)
+        {
+            int minutes = Mathf.Clamp(totalSeconds / 60, 0, 99);
+            int seconds = Mathf.Clamp(totalSeconds % 60, 0, 59);
+            return $"{minutes:00}:{seconds:00}";
+        }
+
+        private static void SetText(TextMeshProUGUI label, string value)
+        {
+            if (label != null && label.text != value)
+            {
+                label.text = value;
+            }
         }
 
         private void OnRestartClicked()

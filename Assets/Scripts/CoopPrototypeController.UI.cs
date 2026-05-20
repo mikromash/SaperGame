@@ -24,7 +24,6 @@ public sealed partial class CoopPrototypeController
         // В геймплее и waiting room рисуем отдельные overlay-панели.
         if (_screen == MenuScreen.InGame)
         {
-            DrawRoomOverlay();
             if (_isPauseMenuOpen)
             {
                 DrawPauseMenu();
@@ -568,17 +567,17 @@ public sealed partial class CoopPrototypeController
 
         GUILayout.BeginHorizontal();
         float sensitivity = GUILayout.HorizontalSlider(
-            CoopUserSettings.MouseSensitivity,
-            CoopUserSettings.MinMouseSensitivity,
-            CoopUserSettings.MaxMouseSensitivity,
+            SettingsManager.MouseSensitivity,
+            SettingsManager.MinMouseSensitivity,
+            SettingsManager.MaxMouseSensitivity,
             GUILayout.Width(210f));
 
         GUILayout.Label(sensitivity.ToString("0.00"), GUILayout.Width(48f));
         GUILayout.EndHorizontal();
 
-        if (!Mathf.Approximately(sensitivity, CoopUserSettings.MouseSensitivity))
+        if (!Mathf.Approximately(sensitivity, SettingsManager.MouseSensitivity))
         {
-            CoopUserSettings.SetMouseSensitivity(sensitivity);
+            SettingsManager.SetMouseSensitivity(sensitivity);
         }
     }
 }

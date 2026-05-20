@@ -20,6 +20,7 @@ namespace Minesweeper
         private readonly int _width;
         private readonly int _height;
         private readonly int _bombCount;
+        private readonly int _seed;
         private readonly System.Random _random;
         private Cell[,] _grid;
 
@@ -28,6 +29,7 @@ namespace Minesweeper
             _width = width;
             _height = height;
             _bombCount = bombCount;
+            _seed = seed;
             _random = new System.Random(seed);
         }
 
@@ -106,6 +108,54 @@ namespace Minesweeper
 
                     cell.neighbourBombs = bombCount;
                 }
+            }
+        }
+
+        public bool MoveBombFromFirstOpen(Cell firstCell)
+        {
+            if (_grid == null || firstCell == null || !firstCell.hasBomb)
+            {
+                return false;
+            }
+
+            List<Cell> validTargets = new List<Cell>(_width * _height);
+            for (int x = 0; x < _width; x++)
+            {
+                for (int y = 0; y < _height; y++)
+                {
+                    Cell candidate = _grid[x, y];
+                    if (candidate == null || candidate.hasBomb || candidate == firstCell)
+                    {
+                        continue;
+                    }
+
+                    validTargets.Add(candidate);
+                }
+            }
+
+            firstCell.hasBomb = false;
+
+            if (validTargets.Count > 0)
+            {
+                System.Random firstClickRandom = new System.Random(GetFirstClickSeed(firstCell));
+                Cell target = validTargets[firstClickRandom.Next(validTargets.Count)];
+                target.hasBomb = true;
+            }
+
+            CalculateNeighbours();
+            return true;
+        }
+
+        private int GetFirstClickSeed(Cell firstCell)
+        {
+            unchecked
+            {
+                int hash = _seed;
+                hash = (hash * 397) ^ firstCell.x;
+                hash = (hash * 397) ^ firstCell.y;
+                hash = (hash * 397) ^ _width;
+                hash = (hash * 397) ^ _height;
+                return hash;
             }
         }
 

@@ -28,6 +28,9 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     [SerializeField] private Slider interactionSoundsSlider;
     [SerializeField] private Slider volumeSlider;
     [SerializeField] private TMP_Dropdown screenModeDropdown;
+    [SerializeField] private Toggle showPingToggle;
+    [SerializeField] private Slider mouseSensitivitySlider;
+    [SerializeField] private TMP_Text mouseSensitivityValueText;
     [SerializeField] private Button settingsBackButton; 
 
     [Header("3. Connection Type")]
@@ -87,6 +90,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     {
         CoopAudioSettings.Apply();
         CoopUserSettings.ApplyAll();
+        EnsureRuntimeSettingsControls();
         RefreshSettingsControls();
         BindListeners();
         InitializeToggles(); 
@@ -178,6 +182,8 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     {
         RefreshAudioSliders();
         RefreshScreenModeDropdown();
+        RefreshPingToggle();
+        RefreshMouseSensitivitySlider();
     }
 
     private void RefreshAudioSliders()
@@ -222,6 +228,34 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
 
         screenModeDropdown.SetValueWithoutNotify((int)CoopUserSettings.ScreenMode);
         screenModeDropdown.RefreshShownValue();
+    }
+
+    private void RefreshPingToggle()
+    {
+        if (showPingToggle != null)
+        {
+            showPingToggle.SetIsOnWithoutNotify(CoopUserSettings.ShowPing);
+        }
+    }
+
+    private void RefreshMouseSensitivitySlider()
+    {
+        if (mouseSensitivitySlider != null)
+        {
+            mouseSensitivitySlider.minValue = SettingsManager.MinMouseSensitivity;
+            mouseSensitivitySlider.maxValue = SettingsManager.MaxMouseSensitivity;
+            mouseSensitivitySlider.SetValueWithoutNotify(SettingsManager.MouseSensitivity);
+        }
+
+        RefreshMouseSensitivityValueText(SettingsManager.MouseSensitivity);
+    }
+
+    private void RefreshMouseSensitivityValueText(float value)
+    {
+        if (mouseSensitivityValueText != null)
+        {
+            mouseSensitivityValueText.text = value.ToString("0.00");
+        }
     }
 
     private void RefreshDynamicFields()
@@ -441,6 +475,30 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
             });
         }
 
+        if (showPingToggle != null)
+        {
+            showPingToggle.onValueChanged.AddListener(value => {
+                if (_controller != null)
+                {
+                    _controller.SetShowPing(value);
+                }
+                else
+                {
+                    CoopUserSettings.SetShowPing(value);
+                }
+
+                AudioController.Play(AudioEvent.UiToggle);
+            });
+        }
+
+        if (mouseSensitivitySlider != null)
+        {
+            mouseSensitivitySlider.onValueChanged.AddListener(value => {
+                SettingsManager.SetMouseSensitivity(value);
+                RefreshMouseSensitivityValueText(SettingsManager.MouseSensitivity);
+            });
+        }
+
         if (publicRoomToggle != null)
         {
             publicRoomToggle.onValueChanged.AddListener((isOn) => {
@@ -475,10 +533,191 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         {
             waitingRoomCopyButtonText.text = _originalCopyButtonText;
         }
-
     }
 
     // --- ЛОГІКА МЕРЕЖІ ---
+
+    private void EnsureRuntimeSettingsControls()
+    {
+        if (settingsScreen == null || (showPingToggle != null && mouseSensitivitySlider != null && mouseSensitivityValueText != null))
+        {
+            return;
+        }
+
+        Transform existing = settingsScreen.transform.Find("RuntimeSettingsControls");
+        Transform root = existing != null ? existing : CreateSettingsExtensionRoot(settingsScreen.transform);
+
+        if (showPingToggle == null)
+        {
+            showPingToggle = CreatePingToggle(root);
+        }
+
+        if (mouseSensitivitySlider == null || mouseSensitivityValueText == null)
+        {
+            CreateMouseSensitivityControl(root);
+        }
+    }
+
+    private Transform CreateSettingsExtensionRoot(Transform parent)
+    {
+        GameObject rootObject = new GameObject("RuntimeSettingsControls");
+        rootObject.transform.SetParent(parent, false);
+
+        RectTransform rectTransform = rootObject.AddComponent<RectTransform>();
+        rectTransform.anchorMin = new Vector2(0.5f, 0f);
+        rectTransform.anchorMax = new Vector2(0.5f, 0f);
+        rectTransform.pivot = new Vector2(0.5f, 0f);
+        rectTransform.anchoredPosition = new Vector2(0f, 92f);
+        rectTransform.sizeDelta = new Vector2(520f, 118f);
+
+        VerticalLayoutGroup layout = rootObject.AddComponent<VerticalLayoutGroup>();
+        layout.spacing = 12f;
+        layout.childControlWidth = true;
+        layout.childControlHeight = true;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+
+        ContentSizeFitter fitter = rootObject.AddComponent<ContentSizeFitter>();
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        return rootObject.transform;
+    }
+
+    private Toggle CreatePingToggle(Transform parent)
+    {
+        GameObject row = CreateSettingsRow(parent, "ShowPingRow");
+        TMP_Text label = CreateSettingsLabel(row.transform, "Show ping");
+        label.rectTransform.sizeDelta = new Vector2(390f, 34f);
+
+        GameObject toggleObject = new GameObject("ShowPingToggle");
+        toggleObject.transform.SetParent(row.transform, false);
+        RectTransform toggleRect = toggleObject.AddComponent<RectTransform>();
+        toggleRect.sizeDelta = new Vector2(34f, 34f);
+
+        Image background = toggleObject.AddComponent<Image>();
+        background.color = new Color(0.12f, 0.13f, 0.15f, 0.95f);
+
+        GameObject checkObject = new GameObject("Checkmark");
+        checkObject.transform.SetParent(toggleObject.transform, false);
+        RectTransform checkRect = checkObject.AddComponent<RectTransform>();
+        checkRect.anchorMin = new Vector2(0.18f, 0.18f);
+        checkRect.anchorMax = new Vector2(0.82f, 0.82f);
+        checkRect.offsetMin = Vector2.zero;
+        checkRect.offsetMax = Vector2.zero;
+
+        Image checkmark = checkObject.AddComponent<Image>();
+        checkmark.color = new Color(0.25f, 0.8f, 0.45f, 1f);
+
+        Toggle toggle = toggleObject.AddComponent<Toggle>();
+        toggle.targetGraphic = background;
+        toggle.graphic = checkmark;
+        return toggle;
+    }
+
+    private void CreateMouseSensitivityControl(Transform parent)
+    {
+        GameObject row = CreateSettingsRow(parent, "MouseSensitivityRow");
+        TMP_Text label = CreateSettingsLabel(row.transform, "Mouse sensitivity");
+        label.rectTransform.sizeDelta = new Vector2(210f, 34f);
+
+        mouseSensitivitySlider = CreateRuntimeSlider(row.transform);
+        mouseSensitivityValueText = CreateSettingsLabel(row.transform, "1.00");
+        mouseSensitivityValueText.alignment = TextAlignmentOptions.Right;
+        mouseSensitivityValueText.rectTransform.sizeDelta = new Vector2(70f, 34f);
+    }
+
+    private GameObject CreateSettingsRow(Transform parent, string name)
+    {
+        GameObject rowObject = new GameObject(name);
+        rowObject.transform.SetParent(parent, false);
+        RectTransform rectTransform = rowObject.AddComponent<RectTransform>();
+        rectTransform.sizeDelta = new Vector2(520f, 38f);
+
+        HorizontalLayoutGroup layout = rowObject.AddComponent<HorizontalLayoutGroup>();
+        layout.spacing = 12f;
+        layout.childAlignment = TextAnchor.MiddleLeft;
+        layout.childControlWidth = false;
+        layout.childControlHeight = true;
+        layout.childForceExpandWidth = false;
+        layout.childForceExpandHeight = false;
+        return rowObject;
+    }
+
+    private TMP_Text CreateSettingsLabel(Transform parent, string text)
+    {
+        GameObject textObject = new GameObject("Label");
+        textObject.transform.SetParent(parent, false);
+        RectTransform rectTransform = textObject.AddComponent<RectTransform>();
+        rectTransform.sizeDelta = new Vector2(200f, 34f);
+
+        TextMeshProUGUI label = textObject.AddComponent<TextMeshProUGUI>();
+        label.text = text;
+        label.fontSize = 22f;
+        label.color = Color.white;
+        label.alignment = TextAlignmentOptions.Left;
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+        label.overflowMode = TextOverflowModes.Ellipsis;
+        return label;
+    }
+
+    private Slider CreateRuntimeSlider(Transform parent)
+    {
+        GameObject sliderObject = new GameObject("MouseSensitivitySlider");
+        sliderObject.transform.SetParent(parent, false);
+        RectTransform sliderRect = sliderObject.AddComponent<RectTransform>();
+        sliderRect.sizeDelta = new Vector2(210f, 34f);
+
+        Slider slider = sliderObject.AddComponent<Slider>();
+        slider.minValue = SettingsManager.MinMouseSensitivity;
+        slider.maxValue = SettingsManager.MaxMouseSensitivity;
+
+        GameObject backgroundObject = new GameObject("Background");
+        backgroundObject.transform.SetParent(sliderObject.transform, false);
+        RectTransform backgroundRect = backgroundObject.AddComponent<RectTransform>();
+        backgroundRect.anchorMin = new Vector2(0f, 0.5f);
+        backgroundRect.anchorMax = new Vector2(1f, 0.5f);
+        backgroundRect.sizeDelta = new Vector2(0f, 8f);
+        Image background = backgroundObject.AddComponent<Image>();
+        background.color = new Color(0.12f, 0.13f, 0.15f, 0.95f);
+
+        GameObject fillAreaObject = new GameObject("Fill Area");
+        fillAreaObject.transform.SetParent(sliderObject.transform, false);
+        RectTransform fillAreaRect = fillAreaObject.AddComponent<RectTransform>();
+        fillAreaRect.anchorMin = new Vector2(0f, 0.5f);
+        fillAreaRect.anchorMax = new Vector2(1f, 0.5f);
+        fillAreaRect.offsetMin = new Vector2(8f, -4f);
+        fillAreaRect.offsetMax = new Vector2(-8f, 4f);
+
+        GameObject fillObject = new GameObject("Fill");
+        fillObject.transform.SetParent(fillAreaObject.transform, false);
+        RectTransform fillRect = fillObject.AddComponent<RectTransform>();
+        fillRect.anchorMin = Vector2.zero;
+        fillRect.anchorMax = Vector2.one;
+        fillRect.offsetMin = Vector2.zero;
+        fillRect.offsetMax = Vector2.zero;
+        Image fill = fillObject.AddComponent<Image>();
+        fill.color = new Color(0.25f, 0.55f, 0.95f, 1f);
+
+        GameObject handleAreaObject = new GameObject("Handle Slide Area");
+        handleAreaObject.transform.SetParent(sliderObject.transform, false);
+        RectTransform handleAreaRect = handleAreaObject.AddComponent<RectTransform>();
+        handleAreaRect.anchorMin = Vector2.zero;
+        handleAreaRect.anchorMax = Vector2.one;
+        handleAreaRect.offsetMin = new Vector2(8f, 0f);
+        handleAreaRect.offsetMax = new Vector2(-8f, 0f);
+
+        GameObject handleObject = new GameObject("Handle");
+        handleObject.transform.SetParent(handleAreaObject.transform, false);
+        RectTransform handleRect = handleObject.AddComponent<RectTransform>();
+        handleRect.sizeDelta = new Vector2(22f, 22f);
+        Image handle = handleObject.AddComponent<Image>();
+        handle.color = Color.white;
+
+        slider.fillRect = fillRect;
+        slider.handleRect = handleRect;
+        slider.targetGraphic = handle;
+        slider.direction = Slider.Direction.LeftToRight;
+        return slider;
+    }
 
     private void OnStartRoomClicked()
     {

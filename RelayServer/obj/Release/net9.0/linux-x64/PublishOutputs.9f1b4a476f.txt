@@ -1,0 +1,2 @@
+D:\Project\Unity\test-ai-coop\neu\msh\SaperGame-main\RelayServer\publish-linux\RelayServer.pdb
+D:\Project\Unity\test-ai-coop\neu\msh\SaperGame-main\RelayServer\publish-linux\RelayServer

@@ -39,7 +39,7 @@ public sealed partial class CoopPrototypeController
     public string PingDisplay => GetPingDisplayText();
     public CoopScreenMode ScreenMode => CoopUserSettings.ScreenMode;
     public bool ShowPing => CoopUserSettings.ShowPing;
-    public float MouseSensitivity => CoopUserSettings.MouseSensitivity;
+    public float MouseSensitivity => SettingsManager.MouseSensitivity;
 
     public void AttachCanvasUi()
     {
@@ -130,7 +130,7 @@ public sealed partial class CoopPrototypeController
 
     public void SetMouseSensitivity(float value)
     {
-        CoopUserSettings.SetMouseSensitivity(value);
+        SettingsManager.SetMouseSensitivity(value);
     }
 
     public void SetPlayerName(string value)

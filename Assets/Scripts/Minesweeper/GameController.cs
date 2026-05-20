@@ -13,6 +13,7 @@ namespace Minesweeper
         private const int GridHeight = 16;
         private const int BombCount = 40;
         private const float CellSize = 3f;
+        private const int GameDurationSeconds = 120;
 
         private static bool _sceneHookRegistered;
 
@@ -24,6 +25,11 @@ namespace Minesweeper
         private UIController _uiController;
         private bool _isGameFinished;
         private bool _isApplyingNetworkCommand;
+        private bool _hasOpenedFirstCell;
+        private float _elapsedTime;
+        private int _elapsedSeconds;
+
+        public event System.Action HudStateChanged;
 
         public bool CanHandleInput
         {
@@ -40,6 +46,37 @@ namespace Minesweeper
                 }
 
                 return !CoopPrototypeController.Instance.IsPauseMenuOpen;
+            }
+        }
+
+        public bool HasOpenedFirstCell => _hasOpenedFirstCell;
+        public bool CanToggleFlags => _hasOpenedFirstCell && !_isGameFinished;
+        public bool IsGameFinished => _isGameFinished;
+        public int BombsTotal => BombCount;
+        public int ElapsedSeconds => _elapsedSeconds;
+        public int FlaggedCells => CountFlaggedCells();
+
+        private void Update()
+        {
+            if (_isGameFinished || _grid == null || !_hasOpenedFirstCell)
+            {
+                return;
+            }
+
+            _elapsedTime += Time.deltaTime;
+            int currentSeconds = Mathf.FloorToInt(_elapsedTime);
+            if (currentSeconds == _elapsedSeconds)
+            {
+                return;
+            }
+
+            _elapsedSeconds = currentSeconds;
+            NotifyHudStateChanged();
+
+            if (_elapsedSeconds >= GameDurationSeconds)
+            {
+                AudioController.PlayAt(AudioEvent.BombExplode, _gridView != null ? _gridView.transform.position : transform.position);
+                GameOver();
             }
         }
 
@@ -127,6 +164,12 @@ namespace Minesweeper
                 return;
             }
 
+            if (!CanToggleFlags)
+            {
+                AudioController.Play(AudioEvent.CellBlocked);
+                return;
+            }
+
             if (ShouldSendNetworkCommand)
             {
                 CoopPrototypeController.Instance?.SendMinesweeperCommand(ToggleFlagAction, cell.x, cell.y);
@@ -193,6 +236,8 @@ namespace Minesweeper
                 return;
             }
 
+            EnsureFirstOpenIsSafe(cell);
+            _hasOpenedFirstCell = true;
             cell.isOpened = true;
             cell.isFlagged = false;
 
@@ -214,6 +259,7 @@ namespace Minesweeper
             }
 
             _gridView.RefreshAllViews();
+            NotifyHudStateChanged();
 
             if (CheckWin())
             {
@@ -223,14 +269,27 @@ namespace Minesweeper
 
         private void ToggleFlagInternal(Cell cell)
         {
+            if (!CanToggleFlags)
+            {
+                AudioController.Play(AudioEvent.CellBlocked);
+                return;
+            }
+
             if (_isGameFinished || cell == null || cell.isOpened)
             {
+                return;
+            }
+
+            if (!cell.isFlagged && FlaggedCells >= BombCount)
+            {
+                AudioController.Play(AudioEvent.CellBlocked);
                 return;
             }
 
             cell.isFlagged = !cell.isFlagged;
             AudioController.Play(cell.isFlagged ? AudioEvent.CellFlagOn : AudioEvent.CellFlagOff);
             _gridView.RefreshAllViews();
+            NotifyHudStateChanged();
         }
 
         public bool CheckWin()
@@ -264,6 +323,9 @@ namespace Minesweeper
         {
             bool hadGrid = _grid != null;
             _isGameFinished = false;
+            _hasOpenedFirstCell = false;
+            _elapsedTime = 0f;
+            _elapsedSeconds = 0;
             CoopPrototypeController.Instance?.ResetPlayersToMinesweeperStart();
             _gridGenerator = new GridGenerator(GridWidth, GridHeight, BombCount, seed);
             _grid = _gridGenerator.CreateGrid();
@@ -272,6 +334,7 @@ namespace Minesweeper
             _gridView.Build(_grid, CellSize);
             _gridView.SetRevealBombs(false);
             _uiController.HideState();
+            NotifyHudStateChanged();
 
             if (hadGrid)
             {
@@ -310,10 +373,43 @@ namespace Minesweeper
             return true;
         }
 
+        private int CountFlaggedCells()
+        {
+            if (_grid == null)
+            {
+                return 0;
+            }
+
+            int count = 0;
+            for (int x = 0; x < _grid.GetLength(0); x++)
+            {
+                for (int y = 0; y < _grid.GetLength(1); y++)
+                {
+                    if (_grid[x, y].isFlagged)
+                    {
+                        count++;
+                    }
+                }
+            }
+
+            return count;
+        }
+
+        private void EnsureFirstOpenIsSafe(Cell cell)
+        {
+            if (_hasOpenedFirstCell || cell == null || !cell.hasBomb || _gridGenerator == null)
+            {
+                return;
+            }
+
+            _gridGenerator.MoveBombFromFirstOpen(cell);
+        }
+
         private void EndGame(bool isWin)
         {
             _isGameFinished = true;
             _gridView.SetRevealBombs(!isWin);
+            NotifyHudStateChanged();
 
             if (isWin)
             {
@@ -327,6 +423,11 @@ namespace Minesweeper
                 AudioController.PlayMusicTrack(MusicTrack.Lose);
                 _uiController.ShowLose();
             }
+        }
+
+        private void NotifyHudStateChanged()
+        {
+            HudStateChanged?.Invoke();
         }
 
         private bool IsCoopSynchronizedGame

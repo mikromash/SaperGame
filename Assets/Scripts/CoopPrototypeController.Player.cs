@@ -17,6 +17,7 @@ public sealed partial class CoopPrototypeController
         // Если в сцене уже есть Cinemachine-риг, используем его вместо старой ручной камеры.
         _camera = Camera.main;
         _sceneCinemachineCamera = FindAnyObjectByType<CinemachineCamera>();
+        EnsureMouseSensitivityAppliers();
         _useSceneCameraRig = _camera != null && _camera.GetComponent<CinemachineBrain>() != null && _sceneCinemachineCamera != null;
         Debug.Log($"[TRACE SetupWorld] Camera.main before setup = {(_camera != null ? _camera.name : "null")}");
         if (_useSceneCameraRig)
@@ -57,6 +58,20 @@ public sealed partial class CoopPrototypeController
         Debug.Log($"[TRACE SetupWorld] Clearing avatars. Existing runtime avatars count={_avatars.Count}");
         ClearAvatars();
         Debug.Log("[TRACE SetupWorld] End.");
+    }
+
+    private static void EnsureMouseSensitivityAppliers()
+    {
+        CinemachineInputAxisController[] axisControllers = FindObjectsByType<CinemachineInputAxisController>();
+        foreach (CinemachineInputAxisController axisController in axisControllers)
+        {
+            if (axisController == null || axisController.GetComponent<MouseSensitivityApplier>() != null)
+            {
+                continue;
+            }
+
+            axisController.gameObject.AddComponent<MouseSensitivityApplier>();
+        }
     }
 
     private void CacheSceneAvatars()
