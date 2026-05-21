@@ -17,20 +17,26 @@ namespace Minesweeper
         private TextMeshProUGUI _roomAccessLabel;
         private TextMeshProUGUI _roomPingLabel;
         private TextMeshProUGUI _timerLabel;
+        private TimerPulseAnimator _timerPulseAnimator;
         private TextMeshProUGUI _flagsLabel;
         private TextMeshProUGUI _stateLabel;
         private Button _restartButton;
+        private Toggle _debugRevealBombsToggle;
         private float _nextRoomInfoRefreshTime;
         private int _lastElapsedSeconds = -1;
         private int _lastFlaggedCells = -1;
         private int _lastBombsTotal = -1;
         private bool _lastCanToggleFlags;
         private bool _lastGameFinished;
+        private bool _lastCountdownWarningActive;
         private string _lastRoomCode = string.Empty;
         private string _lastRoomType = string.Empty;
         private string _lastRoomAccess = string.Empty;
         private string _lastPing = string.Empty;
         private bool _lastShowPing;
+
+        private static readonly Color TimerDefaultColor = Color.white;
+        private static readonly Color TimerWarningColor = new Color(0.94f, 0.18f, 0.18f);
 
         public void Init(GameController gameController)
         {
@@ -123,6 +129,7 @@ namespace Minesweeper
             CreateRoomInfoPanel(_hudRoot);
             CreateTimerPanel(_hudRoot);
             CreateIndicatorsPanel(_hudRoot);
+            CreateDebugPanel(_hudRoot);
             _statusLabel = CreateStatusLabel(canvasObject.transform);
             _restartButton = CreateRestartButton(canvasObject.transform);
         }
@@ -166,6 +173,7 @@ namespace Minesweeper
             RectTransform panel = CreateHudPanel(parent, "TimerPanel", new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -18f), new Vector2(176f, 56f));
             _timerLabel = AddHudText(panel, "TimerValue", "00:00", 32f, FontStyles.Bold, TextAlignmentOptions.Center);
             StretchToParent(_timerLabel.rectTransform, Vector2.zero);
+            _timerPulseAnimator = _timerLabel.gameObject.AddComponent<TimerPulseAnimator>();
         }
 
         private void CreateIndicatorsPanel(Transform parent)
@@ -181,6 +189,22 @@ namespace Minesweeper
 
             _flagsLabel = AddHudText(panel, "Flags", "Flags: 0/0", 22f, FontStyles.Bold, TextAlignmentOptions.Right);
             _stateLabel = AddHudText(panel, "State", "Ready", 17f, FontStyles.Normal, TextAlignmentOptions.Right);
+        }
+
+        private void CreateDebugPanel(Transform parent)
+        {
+            RectTransform panel = CreateHudPanel(parent, "DebugPanel", new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(270f, 138f));
+            VerticalLayoutGroup layout = panel.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset(14, 14, 10, 10);
+            layout.spacing = 8f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+
+            AddHudText(panel, "DebugTitle", "Test Block", 18f, FontStyles.Bold, TextAlignmentOptions.Left);
+            CreateDebugWinButton(panel);
+            _debugRevealBombsToggle = CreateDebugRevealToggle(panel);
         }
 
         private RectTransform CreateHudPanel(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 position, Vector2 size)
@@ -294,6 +318,74 @@ namespace Minesweeper
             return button;
         }
 
+        private void CreateDebugWinButton(Transform parent)
+        {
+            GameObject buttonObject = new GameObject("DebugWinButton");
+            buttonObject.transform.SetParent(parent, false);
+
+            RectTransform rectTransform = buttonObject.AddComponent<RectTransform>();
+            rectTransform.sizeDelta = new Vector2(0f, 36f);
+
+            Image image = buttonObject.AddComponent<Image>();
+            image.color = new Color(0.16f, 0.36f, 0.22f, 0.95f);
+
+            Button button = buttonObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.onClick.AddListener(OnDebugWinClicked);
+
+            TextMeshProUGUI label = AddHudText(buttonObject.transform, "Label", "Test Win", 18f, FontStyles.Bold, TextAlignmentOptions.Center);
+            StretchToParent(label.rectTransform, new Vector2(4f, 2f));
+        }
+
+        private Toggle CreateDebugRevealToggle(Transform parent)
+        {
+            GameObject toggleObject = new GameObject("DebugRevealBombsToggle");
+            toggleObject.transform.SetParent(parent, false);
+            RectTransform toggleRect = toggleObject.AddComponent<RectTransform>();
+            toggleRect.sizeDelta = new Vector2(0f, 36f);
+
+            Image rowBackground = toggleObject.AddComponent<Image>();
+            rowBackground.color = new Color(0f, 0f, 0f, 0f);
+
+            Toggle toggle = toggleObject.AddComponent<Toggle>();
+            toggle.targetGraphic = rowBackground;
+            toggle.onValueChanged.AddListener(OnDebugRevealBombsChanged);
+
+            HorizontalLayoutGroup layout = toggleObject.AddComponent<HorizontalLayoutGroup>();
+            layout.spacing = 8f;
+            layout.childAlignment = TextAnchor.MiddleLeft;
+            layout.childControlHeight = true;
+            layout.childControlWidth = false;
+            layout.childForceExpandHeight = false;
+            layout.childForceExpandWidth = false;
+
+            GameObject boxObject = new GameObject("Checkbox");
+            boxObject.transform.SetParent(toggleObject.transform, false);
+            RectTransform boxRect = boxObject.AddComponent<RectTransform>();
+            boxRect.sizeDelta = new Vector2(30f, 30f);
+
+            Image background = boxObject.AddComponent<Image>();
+            background.color = new Color(0.2f, 0.22f, 0.27f, 1f);
+
+            GameObject checkObject = new GameObject("Checkmark");
+            checkObject.transform.SetParent(boxObject.transform, false);
+            RectTransform checkRect = checkObject.AddComponent<RectTransform>();
+            checkRect.anchorMin = new Vector2(0.2f, 0.2f);
+            checkRect.anchorMax = new Vector2(0.8f, 0.8f);
+            checkRect.offsetMin = Vector2.zero;
+            checkRect.offsetMax = Vector2.zero;
+
+            Image checkmark = checkObject.AddComponent<Image>();
+            checkmark.color = new Color(0.92f, 0.18f, 0.18f, 1f);
+
+            toggle.graphic = checkmark;
+
+            TextMeshProUGUI label = AddHudText(toggleObject.transform, "Label", "Reveal bombs", 17f, FontStyles.Normal, TextAlignmentOptions.Left);
+            label.rectTransform.sizeDelta = new Vector2(190f, 30f);
+            label.raycastTarget = true;
+            return toggle;
+        }
+
         private void RefreshGameplayHud()
         {
             if (_gameController == null)
@@ -324,6 +416,18 @@ namespace Minesweeper
                 _lastCanToggleFlags = canToggleFlags;
                 _lastGameFinished = isGameFinished;
                 SetText(_stateLabel, GetStateText());
+            }
+
+            bool countdownWarningActive = _gameController.IsCountdownWarningActive;
+            if (countdownWarningActive != _lastCountdownWarningActive)
+            {
+                _lastCountdownWarningActive = countdownWarningActive;
+                RefreshTimerWarningState(countdownWarningActive);
+            }
+
+            if (_debugRevealBombsToggle != null && _debugRevealBombsToggle.isOn != _gameController.DebugRevealBombs)
+            {
+                _debugRevealBombsToggle.SetIsOnWithoutNotify(_gameController.DebugRevealBombs);
             }
         }
 
@@ -397,9 +501,29 @@ namespace Minesweeper
             }
         }
 
+        private void RefreshTimerWarningState(bool isWarningActive)
+        {
+            if (_timerLabel != null)
+            {
+                _timerLabel.color = isWarningActive ? TimerWarningColor : TimerDefaultColor;
+            }
+
+            _timerPulseAnimator?.SetPulsing(isWarningActive);
+        }
+
         private void OnRestartClicked()
         {
             _gameController?.RestartGame();
+        }
+
+        private void OnDebugWinClicked()
+        {
+            _gameController?.DebugWinGame();
+        }
+
+        private void OnDebugRevealBombsChanged(bool revealBombs)
+        {
+            _gameController?.SetDebugRevealBombs(revealBombs);
         }
     }
 }

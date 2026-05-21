@@ -8,6 +8,9 @@ namespace Minesweeper
         private const string RestartAction = "restart";
         private const string OpenAction = "open";
         private const string ToggleFlagAction = "flag";
+        private const string DebugWinAction = "debug_win";
+        private const string DebugRevealBombsOnAction = "debug_reveal_bombs_on";
+        private const string DebugRevealBombsOffAction = "debug_reveal_bombs_off";
         private const string GameplaySceneName = "GameplayScene";
         private const int GridWidth = 16;
         private const int GridHeight = 16;
@@ -26,6 +29,7 @@ namespace Minesweeper
         private bool _isGameFinished;
         private bool _isApplyingNetworkCommand;
         private bool _hasOpenedFirstCell;
+        private bool _debugRevealBombs;
         private float _elapsedTime;
         private int _elapsedSeconds;
 
@@ -52,8 +56,12 @@ namespace Minesweeper
         public bool HasOpenedFirstCell => _hasOpenedFirstCell;
         public bool CanToggleFlags => _hasOpenedFirstCell && !_isGameFinished;
         public bool IsGameFinished => _isGameFinished;
+        public bool DebugRevealBombs => _debugRevealBombs;
         public int BombsTotal => BombCount;
+        public int GameTimeLimitSeconds => GameDurationSeconds;
         public int ElapsedSeconds => _elapsedSeconds;
+        public int RemainingSeconds => Mathf.Max(0, GameDurationSeconds - _elapsedSeconds);
+        public bool IsCountdownWarningActive => _hasOpenedFirstCell && !_isGameFinished && RemainingSeconds <= 10;
         public int FlaggedCells => CountFlaggedCells();
 
         private void Update()
@@ -72,6 +80,11 @@ namespace Minesweeper
 
             _elapsedSeconds = currentSeconds;
             NotifyHudStateChanged();
+
+            if (IsCountdownWarningActive && RemainingSeconds > 0)
+            {
+                AudioController.Play(AudioEvent.TimerCountdownTick);
+            }
 
             if (_elapsedSeconds >= GameDurationSeconds)
             {
@@ -193,6 +206,39 @@ namespace Minesweeper
             RestartGameInternal(localSeed);
         }
 
+        public void DebugWinGame()
+        {
+            if (_isGameFinished || _grid == null)
+            {
+                return;
+            }
+
+            if (ShouldSendNetworkCommand)
+            {
+                CoopPrototypeController.Instance?.SendMinesweeperCommand(DebugWinAction);
+                return;
+            }
+
+            EndGame(true);
+        }
+
+        public void SetDebugRevealBombs(bool revealBombs)
+        {
+            if (_grid == null)
+            {
+                return;
+            }
+
+            if (ShouldSendNetworkCommand)
+            {
+                string action = revealBombs ? DebugRevealBombsOnAction : DebugRevealBombsOffAction;
+                CoopPrototypeController.Instance?.SendMinesweeperCommand(action);
+                return;
+            }
+
+            SetDebugRevealBombsInternal(revealBombs);
+        }
+
         public void HandleNetworkCommand(string action, int cellX, int cellY, int boardSeed)
         {
             _isApplyingNetworkCommand = true;
@@ -202,6 +248,24 @@ namespace Minesweeper
                 if (string.Equals(action, RestartAction, System.StringComparison.Ordinal))
                 {
                     RestartGameInternal(boardSeed);
+                    return;
+                }
+
+                if (string.Equals(action, DebugWinAction, System.StringComparison.Ordinal))
+                {
+                    DebugWinGame();
+                    return;
+                }
+
+                if (string.Equals(action, DebugRevealBombsOnAction, System.StringComparison.Ordinal))
+                {
+                    SetDebugRevealBombsInternal(true);
+                    return;
+                }
+
+                if (string.Equals(action, DebugRevealBombsOffAction, System.StringComparison.Ordinal))
+                {
+                    SetDebugRevealBombsInternal(false);
                     return;
                 }
 
@@ -324,6 +388,7 @@ namespace Minesweeper
             bool hadGrid = _grid != null;
             _isGameFinished = false;
             _hasOpenedFirstCell = false;
+            _debugRevealBombs = false;
             _elapsedTime = 0f;
             _elapsedSeconds = 0;
             CoopPrototypeController.Instance?.ResetPlayersToMinesweeperStart();
@@ -403,6 +468,18 @@ namespace Minesweeper
             }
 
             _gridGenerator.MoveBombFromFirstOpen(cell);
+        }
+
+        private void SetDebugRevealBombsInternal(bool revealBombs)
+        {
+            if (_debugRevealBombs == revealBombs || _gridView == null)
+            {
+                return;
+            }
+
+            _debugRevealBombs = revealBombs;
+            _gridView.SetRevealBombs(revealBombs);
+            NotifyHudStateChanged();
         }
 
         private void EndGame(bool isWin)

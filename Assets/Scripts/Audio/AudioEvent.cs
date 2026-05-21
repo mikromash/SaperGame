@@ -27,5 +27,6 @@ public enum AudioEvent
     GameRestart,
     PlayerJump,
     PlayerLand,
-    PlayerStep
+    PlayerStep,
+    TimerCountdownTick
 }
