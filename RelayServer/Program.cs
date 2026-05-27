@@ -104,7 +104,7 @@ internal sealed class RelayServer : IDisposable
             try
             {
                 TcpClient client = _listener!.AcceptTcpClient();
-                client.NoDelay = true;
+                RelaySocketUtility.ConfigureTcpClient(client);
                 Thread thread = new Thread(() => HandleClient(client)) { IsBackground = true, Name = "Relay Client" };
                 thread.Start();
             }
@@ -208,6 +208,8 @@ internal sealed class RelayServer : IDisposable
                 {
                     break;
                 }
+
+                connection.MarkReceived();
 
                 CoopNetworkMessage? message = JsonRelay.FromJson(line);
                 if (message == null)
@@ -595,11 +597,13 @@ internal sealed class RelayRoom : IDisposable
         List<int> toRemove = new List<int>();
         foreach (RelayConnection connection in connections)
         {
-            try
+            if (connection.ShouldDisconnect())
             {
-                connection.Send(buildMessage(connection));
+                toRemove.Add(connection.PlayerId);
+                continue;
             }
-            catch
+
+            if (!connection.TrySend(buildMessage(connection)) && connection.ShouldDisconnect())
             {
                 toRemove.Add(connection.PlayerId);
             }
@@ -614,6 +618,11 @@ internal sealed class RelayRoom : IDisposable
         {
             foreach (int playerId in toRemove)
             {
+                if (_connections.TryGetValue(playerId, out RelayConnection? connection))
+                {
+                    connection.Dispose();
+                }
+
                 _connections.Remove(playerId);
                 _players.Remove(playerId);
             }
@@ -663,9 +672,14 @@ internal sealed class RelayRoom : IDisposable
 
 internal sealed class RelayConnection : IDisposable
 {
+    private const int MaxConsecutiveSendFailures = 3;
+    private const double ReceiveTimeoutSeconds = 20.0;
+
     private readonly TcpClient _client;
     private readonly StreamWriter _writer;
     private readonly object _writeLock = new object();
+    private DateTime _lastReceivedUtc;
+    private int _consecutiveSendFailures;
 
     public RelayConnection(TcpClient client, StreamWriter writer, string roomCode, int playerId)
     {
@@ -673,17 +687,46 @@ internal sealed class RelayConnection : IDisposable
         _writer = writer;
         RoomCode = roomCode;
         PlayerId = playerId;
+        _lastReceivedUtc = DateTime.UtcNow;
     }
 
     public string RoomCode { get; }
     public int PlayerId { get; }
 
-    public void Send(CoopNetworkMessage message)
+    public void MarkReceived()
     {
-        lock (_writeLock)
+        _lastReceivedUtc = DateTime.UtcNow;
+        _consecutiveSendFailures = 0;
+    }
+
+    public bool TrySend(CoopNetworkMessage message)
+    {
+        try
         {
-            _writer.WriteLine(JsonRelay.ToJson(message));
+            lock (_writeLock)
+            {
+                _writer.WriteLine(JsonRelay.ToJson(message));
+            }
+
+            _lastReceivedUtc = DateTime.UtcNow;
+            _consecutiveSendFailures = 0;
+            return true;
         }
+        catch
+        {
+            _consecutiveSendFailures++;
+            return false;
+        }
+    }
+
+    public bool ShouldDisconnect()
+    {
+        if (_consecutiveSendFailures >= MaxConsecutiveSendFailures)
+        {
+            return true;
+        }
+
+        return (DateTime.UtcNow - _lastReceivedUtc).TotalSeconds > ReceiveTimeoutSeconds;
     }
 
     public void Dispose()
@@ -705,6 +748,22 @@ internal sealed class RelayPlayer
     public float X;
     public float Y;
     public float Z;
+}
+
+internal static class RelaySocketUtility
+{
+    public static void ConfigureTcpClient(TcpClient client)
+    {
+        client.NoDelay = true;
+
+        try
+        {
+            client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+        }
+        catch
+        {
+        }
+    }
 }
 
 #pragma warning disable CS0649

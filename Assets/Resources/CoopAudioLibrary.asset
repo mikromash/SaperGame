@@ -62,6 +62,13 @@ MonoBehaviour:
     pitchJitter: 0
     cooldown: 0
     spatial: 0
+  - eventId: 28
+    clips:
+    - {fileID: 8300000, guid: e1018e54b41743243919e17d21d67f0c, type: 3}
+    volume: 0.3
+    pitchJitter: 0
+    cooldown: 0
+    spatial: 0
   music:
   - track: 1
     clip: {fileID: 8300000, guid: dcd2537e7c85f064bb90328c9f4ecf9c, type: 3}

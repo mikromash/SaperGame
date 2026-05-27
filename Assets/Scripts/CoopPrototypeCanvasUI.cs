@@ -90,6 +90,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     {
         CoopAudioSettings.Apply();
         CoopUserSettings.ApplyAll();
+        CoopUserSettings.ScreenModeChanged += HandleScreenModeChanged;
         EnsureRuntimeSettingsControls();
         RefreshSettingsControls();
         BindListeners();
@@ -138,7 +139,13 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
 
     private void OnDestroy()
     {
+        CoopUserSettings.ScreenModeChanged -= HandleScreenModeChanged;
         if (_controller != null) _controller.DetachCanvasUi();
+    }
+
+    private void HandleScreenModeChanged(CoopScreenMode mode)
+    {
+        RefreshScreenModeDropdown();
     }
 
     // --- ІНІЦІАЛІЗАЦІЯ ---

@@ -96,6 +96,27 @@ internal static class CoopRelaySettings
     }
 }
 
+internal static class CoopNetworkSocketUtility
+{
+    public static void ConfigureTcpClient(TcpClient client)
+    {
+        if (client == null)
+        {
+            return;
+        }
+
+        client.NoDelay = true;
+
+        try
+        {
+            client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+        }
+        catch
+        {
+        }
+    }
+}
+
 internal sealed class CoopRelayClient
 {
     // Клиент подключается к relay, читает сообщения в фоне и складывает их в очередь для Unity-потока.
@@ -268,8 +289,9 @@ internal sealed class CoopRelayClient
             DisconnectStatus = null;
 
             _client = new TcpClient();
-            _client.NoDelay = true;
+            CoopNetworkSocketUtility.ConfigureTcpClient(_client);
             _client.Connect(host, port);
+            CoopNetworkSocketUtility.ConfigureTcpClient(_client);
 
             NetworkStream stream = _client.GetStream();
             StreamReader reader = new StreamReader(stream, Encoding.UTF8);
@@ -439,7 +461,7 @@ internal sealed class CoopEmbeddedRelayServer
             try
             {
                 TcpClient client = _listener.AcceptTcpClient();
-                client.NoDelay = true;
+                CoopNetworkSocketUtility.ConfigureTcpClient(client);
                 Thread thread = new Thread(() => HandleClient(client)) { IsBackground = true };
                 thread.Start();
             }
@@ -539,6 +561,8 @@ internal sealed class CoopEmbeddedRelayServer
                     {
                         break;
                     }
+
+                    connection.MarkReceived();
 
                     CoopNetworkMessage message = JsonUtility.FromJson<CoopNetworkMessage>(line);
                     if (message != null && message.Type == "Move")
@@ -872,34 +896,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
             snapshot = BuildSnapshot();
         }
 
-        List<int> toRemove = new List<int>();
-        foreach (CoopEmbeddedRelayConnection connection in connections)
-        {
-            try
-            {
-                connection.Send(BuildRoomMessage("Snapshot", snapshot, connection.PlayerId));
-            }
-            catch
-            {
-                toRemove.Add(connection.PlayerId);
-            }
-        }
-
-        if (toRemove.Count == 0)
-        {
-            return;
-        }
-
-        lock (_sync)
-        {
-            foreach (int playerId in toRemove)
-            {
-                _connections.Remove(playerId);
-                _players.Remove(playerId);
-            }
-
-            State = DetermineState();
-        }
+        BroadcastToConnections(connections, connection => BuildRoomMessage("Snapshot", snapshot, connection.PlayerId));
     }
 
     public void BroadcastGameStarted()
@@ -915,34 +912,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
             snapshot = BuildSnapshot();
         }
 
-        List<int> toRemove = new List<int>();
-        foreach (CoopEmbeddedRelayConnection connection in connections)
-        {
-            try
-            {
-                connection.Send(BuildRoomMessage("GameStarted", snapshot, connection.PlayerId));
-            }
-            catch
-            {
-                toRemove.Add(connection.PlayerId);
-            }
-        }
-
-        if (toRemove.Count == 0)
-        {
-            return;
-        }
-
-        lock (_sync)
-        {
-            foreach (int playerId in toRemove)
-            {
-                _connections.Remove(playerId);
-                _players.Remove(playerId);
-            }
-
-            State = DetermineState();
-        }
+        BroadcastToConnections(connections, connection => BuildRoomMessage("GameStarted", snapshot, connection.PlayerId));
     }
 
     public void BroadcastMinesweeperCommand(string action, int cellX, int cellY, int boardSeed)
@@ -962,39 +932,15 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
             snapshot = BuildSnapshot();
         }
 
-        List<int> toRemove = new List<int>();
-        foreach (CoopEmbeddedRelayConnection connection in connections)
+        BroadcastToConnections(connections, connection =>
         {
-            try
-            {
-                CoopNetworkMessage message = BuildRoomMessage("MinesweeperCommand", snapshot, connection.PlayerId);
-                message.MinesweeperAction = action ?? string.Empty;
-                message.CellX = cellX;
-                message.CellY = cellY;
-                message.BoardSeed = boardSeed;
-                connection.Send(message);
-            }
-            catch
-            {
-                toRemove.Add(connection.PlayerId);
-            }
-        }
-
-        if (toRemove.Count == 0)
-        {
-            return;
-        }
-
-        lock (_sync)
-        {
-            foreach (int playerId in toRemove)
-            {
-                _connections.Remove(playerId);
-                _players.Remove(playerId);
-            }
-
-            State = DetermineState();
-        }
+            CoopNetworkMessage message = BuildRoomMessage("MinesweeperCommand", snapshot, connection.PlayerId);
+            message.MinesweeperAction = action ?? string.Empty;
+            message.CellX = cellX;
+            message.CellY = cellY;
+            message.BoardSeed = boardSeed;
+            return message;
+        });
     }
 
     public void Dispose()
@@ -1041,6 +987,47 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
         };
     }
 
+    private void BroadcastToConnections(
+        CoopEmbeddedRelayConnection[] connections,
+        Func<CoopEmbeddedRelayConnection, CoopNetworkMessage> buildMessage)
+    {
+        List<int> toRemove = new List<int>();
+        foreach (CoopEmbeddedRelayConnection connection in connections)
+        {
+            if (connection.ShouldDisconnect())
+            {
+                toRemove.Add(connection.PlayerId);
+                continue;
+            }
+
+            if (!connection.TrySend(buildMessage(connection)) && connection.ShouldDisconnect())
+            {
+                toRemove.Add(connection.PlayerId);
+            }
+        }
+
+        if (toRemove.Count == 0)
+        {
+            return;
+        }
+
+        lock (_sync)
+        {
+            foreach (int playerId in toRemove)
+            {
+                if (_connections.TryGetValue(playerId, out CoopEmbeddedRelayConnection connection))
+                {
+                    connection.Dispose();
+                }
+
+                _connections.Remove(playerId);
+                _players.Remove(playerId);
+            }
+
+            State = DetermineState();
+        }
+    }
+
     private string DetermineState()
     {
         if (State == RoomStateInGame)
@@ -1060,9 +1047,14 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
 internal sealed class CoopEmbeddedRelayConnection : IDisposable
 {
     // Обертка над сокетом конкретного игрока внутри локальной комнаты.
+    private const int MaxConsecutiveSendFailures = 3;
+    private const double ReceiveTimeoutSeconds = 20.0;
+
     private readonly TcpClient _client;
     private readonly StreamWriter _writer;
     private readonly object _writeLock = new object();
+    private DateTime _lastReceivedUtc;
+    private int _consecutiveSendFailures;
 
     public CoopEmbeddedRelayConnection(TcpClient client, StreamWriter writer, string roomCode, int playerId)
     {
@@ -1070,18 +1062,47 @@ internal sealed class CoopEmbeddedRelayConnection : IDisposable
         _writer = writer;
         RoomCode = roomCode;
         PlayerId = playerId;
+        _lastReceivedUtc = DateTime.UtcNow;
     }
 
     public string RoomCode { get; }
 
     public int PlayerId { get; }
 
-    public void Send(CoopNetworkMessage message)
+    public void MarkReceived()
     {
-        lock (_writeLock)
+        _lastReceivedUtc = DateTime.UtcNow;
+        _consecutiveSendFailures = 0;
+    }
+
+    public bool TrySend(CoopNetworkMessage message)
+    {
+        try
         {
-            _writer.WriteLine(JsonUtility.ToJson(message));
+            lock (_writeLock)
+            {
+                _writer.WriteLine(JsonUtility.ToJson(message));
+            }
+
+            _lastReceivedUtc = DateTime.UtcNow;
+            _consecutiveSendFailures = 0;
+            return true;
         }
+        catch
+        {
+            _consecutiveSendFailures++;
+            return false;
+        }
+    }
+
+    public bool ShouldDisconnect()
+    {
+        if (_consecutiveSendFailures >= MaxConsecutiveSendFailures)
+        {
+            return true;
+        }
+
+        return (DateTime.UtcNow - _lastReceivedUtc).TotalSeconds > ReceiveTimeoutSeconds;
     }
 
     public void Dispose()

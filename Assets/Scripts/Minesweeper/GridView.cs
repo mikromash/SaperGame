@@ -6,10 +6,22 @@ namespace Minesweeper
     {
         private Transform _gridRoot;
         private CellView[,] _cellViews;
+        private CellView _cellPrefab; // Зберігаємо посилання на завантажений префаб
 
         public void Build(Cell[,] grid, float cellSize)
         {
             Clear();
+
+            // Завантажуємо префаб з папки Resources
+            if (_cellPrefab == null)
+            {
+                _cellPrefab = Resources.Load<CellView>("CellPrefab");
+                if (_cellPrefab == null)
+                {
+                    Debug.LogError("Minesweeper: Не знайдено 'CellPrefab' у папці Resources!");
+                    return;
+                }
+            }
 
             int width = grid.GetLength(0);
             int height = grid.GetLength(1);
@@ -30,52 +42,39 @@ namespace Minesweeper
                 for (int y = 0; y < height; y++)
                 {
                     Cell cell = grid[x, y];
-                    GameObject cellObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    cellObject.name = $"Cell_{x}_{y}";
-                    cellObject.transform.SetParent(_gridRoot, false);
-                    cellObject.transform.localPosition = origin + new Vector3(x * cellSize, 0f, y * cellSize);
-                    cellObject.transform.localScale = new Vector3(cellSize * 0.92f, cellHeight, cellSize * 0.92f);
+                    
+                    // СТВОРЮЄМО КЛІТИНКУ З ПРЕФАБУ, А НЕ З ПРИМІТИВУ
+                    CellView cellView = Instantiate(_cellPrefab, _gridRoot, false);
+                    cellView.name = $"Cell_{x}_{y}";
+                    
+                    cellView.transform.localPosition = origin + new Vector3(x * cellSize, 0f, y * cellSize);
+                    cellView.transform.localScale = new Vector3(cellSize * 0.92f, cellHeight, cellSize * 0.92f);
 
-                    CellView cellView = cellObject.AddComponent<CellView>();
                     cellView.Init(cell);
                     _cellViews[x, y] = cellView;
                 }
             }
         }
 
+        // ... Залиш інші методи (RefreshAllViews, SetRevealBombs, Clear) без змін ...
+        
         public void RefreshAllViews()
         {
-            if (_cellViews == null)
-            {
-                return;
-            }
-
+            if (_cellViews == null) return;
             for (int x = 0; x < _cellViews.GetLength(0); x++)
-            {
                 for (int y = 0; y < _cellViews.GetLength(1); y++)
-                {
                     _cellViews[x, y]?.UpdateView();
-                }
-            }
         }
 
         public void SetRevealBombs(bool revealBombs)
         {
-            if (_cellViews == null)
-            {
-                return;
-            }
-
+            if (_cellViews == null) return;
             for (int x = 0; x < _cellViews.GetLength(0); x++)
             {
                 for (int y = 0; y < _cellViews.GetLength(1); y++)
                 {
                     CellView cellView = _cellViews[x, y];
-                    if (cellView == null)
-                    {
-                        continue;
-                    }
-
+                    if (cellView == null) continue;
                     cellView.SetRevealBombs(revealBombs);
                     cellView.UpdateView();
                 }
@@ -89,7 +88,6 @@ namespace Minesweeper
                 Destroy(_gridRoot.gameObject);
                 _gridRoot = null;
             }
-
             _cellViews = null;
         }
     }

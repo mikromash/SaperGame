@@ -17,6 +17,7 @@ public sealed class AudioController : MonoBehaviour
     [SerializeField] private int sfxSourceCount = SfxSourceCount;
 
     private readonly Dictionary<AudioEvent, float> _lastPlayTimes = new Dictionary<AudioEvent, float>();
+    private readonly Dictionary<AudioSource, AudioEvent> _sfxSourceEvents = new Dictionary<AudioSource, AudioEvent>();
     private readonly List<AudioSource> _sfxSources = new List<AudioSource>();
     private AudioSource _musicSource;
     private Coroutine _musicFadeRoutine;
@@ -52,6 +53,11 @@ public sealed class AudioController : MonoBehaviour
     public static void PlayMusicTrack(MusicTrack track)
     {
         Instance.PlayMusic(track);
+    }
+
+    public static void Stop(AudioEvent eventId)
+    {
+        Instance.StopSfx(eventId);
     }
 
     public void PlaySfx(AudioEvent eventId)
@@ -208,8 +214,35 @@ public sealed class AudioController : MonoBehaviour
         source.spatialBlend = settings.spatial && position.HasValue ? 1f : 0f;
         source.pitch = 1f + Random.Range(-settings.pitchJitter, settings.pitchJitter);
         source.volume = settings.volume * CoopAudioSettings.InteractionVolume;
+        _sfxSourceEvents[source] = eventId;
         source.PlayOneShot(clip);
         _lastPlayTimes[eventId] = Time.unscaledTime;
+    }
+
+    private void StopSfx(AudioEvent eventId)
+    {
+        List<AudioSource> stoppedSources = null;
+        foreach (KeyValuePair<AudioSource, AudioEvent> pair in _sfxSourceEvents)
+        {
+            if (pair.Value != eventId || pair.Key == null)
+            {
+                continue;
+            }
+
+            pair.Key.Stop();
+            stoppedSources ??= new List<AudioSource>();
+            stoppedSources.Add(pair.Key);
+        }
+
+        if (stoppedSources != null)
+        {
+            for (int index = 0; index < stoppedSources.Count; index++)
+            {
+                _sfxSourceEvents.Remove(stoppedSources[index]);
+            }
+        }
+
+        _lastPlayTimes.Remove(eventId);
     }
 
     private bool IsCoolingDown(AudioEvent eventId, float cooldown)

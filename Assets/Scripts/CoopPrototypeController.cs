@@ -124,6 +124,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
     private void Update()
     {
         // Сначала обновляем сеть и служебное состояние UI.
+        CoopUserSettings.SyncScreenModeWithRuntimeWindow();
         PumpRelayMessages();
         UpdatePingMeasurement();
         LogUiStateIfChanged();

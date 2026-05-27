@@ -403,7 +403,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &46872567
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2990,7 +2990,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &619684115
 RectTransform:
   m_ObjectHideFlags: 0
@@ -4413,9 +4413,6 @@ MonoBehaviour:
   interactionSoundsSlider: {fileID: 1677990954}
   volumeSlider: {fileID: 1699492751}
   screenModeDropdown: {fileID: 922608144}
-  showPingToggle: {fileID: 0}
-  mouseSensitivitySlider: {fileID: 0}
-  mouseSensitivityValueText: {fileID: 0}
   settingsBackButton: {fileID: 254712836}
   localConnButton: {fileID: 843888452}
   onlineConnButton: {fileID: 278184636}

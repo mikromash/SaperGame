@@ -391,6 +391,7 @@ namespace Minesweeper
             _debugRevealBombs = false;
             _elapsedTime = 0f;
             _elapsedSeconds = 0;
+            StopCountdownAudio();
             CoopPrototypeController.Instance?.ResetPlayersToMinesweeperStart();
             _gridGenerator = new GridGenerator(GridWidth, GridHeight, BombCount, seed);
             _grid = _gridGenerator.CreateGrid();
@@ -485,6 +486,7 @@ namespace Minesweeper
         private void EndGame(bool isWin)
         {
             _isGameFinished = true;
+            StopCountdownAudio();
             _gridView.SetRevealBombs(!isWin);
             NotifyHudStateChanged();
 
@@ -505,6 +507,11 @@ namespace Minesweeper
         private void NotifyHudStateChanged()
         {
             HudStateChanged?.Invoke();
+        }
+
+        private static void StopCountdownAudio()
+        {
+            AudioController.Stop(AudioEvent.TimerCountdownTick);
         }
 
         private bool IsCoopSynchronizedGame
