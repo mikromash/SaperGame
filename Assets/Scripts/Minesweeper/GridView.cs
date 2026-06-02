@@ -81,6 +81,20 @@ namespace Minesweeper
             }
         }
 
+        public void SetMovedBombHighlight(Cell highlightedCell, bool showHighlight)
+        {
+            if (_cellViews == null) return;
+            for (int x = 0; x < _cellViews.GetLength(0); x++)
+            {
+                for (int y = 0; y < _cellViews.GetLength(1); y++)
+                {
+                    CellView cellView = _cellViews[x, y];
+                    if (cellView == null) continue;
+                    cellView.SetMovedBombHighlight(showHighlight && cellView.Cell == highlightedCell);
+                }
+            }
+        }
+
         public void Clear()
         {
             if (_gridRoot != null)

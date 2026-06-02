@@ -128,6 +128,8 @@ public sealed partial class CoopPrototypeController
             GUILayout.Space(8f);
             GUILayout.Label("Room name:");
             _roomName = GUILayout.TextField(_roomName, 32);
+            GUILayout.Label($"Mines ({MinMineCount}-{MaxMineCount}):");
+            _mineCountText = GUILayout.TextField(_mineCountText, 2);
             GUILayout.Label("Room access:");
 
             bool publicRoom = !_isPrivateRoom;

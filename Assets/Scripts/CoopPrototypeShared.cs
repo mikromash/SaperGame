@@ -27,6 +27,7 @@ internal sealed class CoopNetworkMessage
     public bool IsHost = false;
     public bool CanStartGame = false;
     public long PingTicks = 0L;
+    public int MineCount = 40;
     public string MinesweeperAction = string.Empty;
     public int CellX = -1;
     public int CellY = -1;
@@ -133,7 +134,7 @@ internal sealed class CoopRelayClient
     public int LocalPlayerId { get; private set; }
     public string ConnectedRoomCode { get; private set; }
 
-    public bool CreateRoom(string host, int port, string playerName, string roomName, bool isPrivate, string password)
+    public bool CreateRoom(string host, int port, string playerName, string roomName, bool isPrivate, string password, int mineCount)
     {
         // Хост запрашивает создание новой комнаты.
         return Connect(host, port, new CoopNetworkMessage
@@ -142,7 +143,8 @@ internal sealed class CoopRelayClient
             PlayerName = playerName,
             RoomName = roomName,
             IsPrivate = isPrivate,
-            Password = password ?? string.Empty
+            Password = password ?? string.Empty,
+            MineCount = mineCount
         });
     }
 
@@ -549,6 +551,7 @@ internal sealed class CoopEmbeddedRelayServer
                     RoomState = room.State,
                     IsHost = player.PlayerId == 1,
                     CanStartGame = player.PlayerId == 1 && room.State == RoomStatePlayerJoined,
+                    MineCount = room.MineCount,
                     Players = room.BuildSnapshot()
                 });
 
@@ -659,7 +662,8 @@ internal sealed class CoopEmbeddedRelayServer
                 roomCode,
                 string.IsNullOrWhiteSpace(request.RoomName) ? "Local Room" : request.RoomName.Trim(),
                 request.IsPrivate,
-                request.IsPrivate ? request.Password ?? string.Empty : string.Empty);
+                request.IsPrivate ? request.Password ?? string.Empty : string.Empty,
+                request.MineCount);
             player = room.AddPlayer(string.IsNullOrWhiteSpace(request.PlayerName) ? "Player" : request.PlayerName.Trim());
             _rooms[roomCode] = room;
             return true;
@@ -725,12 +729,13 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
     private readonly Dictionary<int, CoopEmbeddedRelayPlayer> _players = new Dictionary<int, CoopEmbeddedRelayPlayer>();
     private readonly Dictionary<int, CoopEmbeddedRelayConnection> _connections = new Dictionary<int, CoopEmbeddedRelayConnection>();
 
-    public CoopEmbeddedRelayRoom(string roomCode, string roomName, bool isPrivate, string password)
+    public CoopEmbeddedRelayRoom(string roomCode, string roomName, bool isPrivate, string password, int mineCount)
     {
         RoomCode = roomCode;
         RoomName = roomName;
         IsPrivate = isPrivate;
         Password = password ?? string.Empty;
+        MineCount = Mathf.Clamp(mineCount, 5, 40);
         State = RoomStateWaitingForPlayer;
     }
 
@@ -739,6 +744,8 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
     public string RoomName { get; }
 
     public bool IsPrivate { get; }
+
+    public int MineCount { get; }
 
     private string Password { get; }
 
@@ -983,6 +990,7 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
             RoomState = State,
             IsHost = recipientPlayerId == 1,
             CanStartGame = recipientPlayerId == 1 && State == RoomStatePlayerJoined,
+            MineCount = MineCount,
             Players = snapshot
         };
     }

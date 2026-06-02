@@ -12,6 +12,9 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
     private const float MoveSpeed = 6f;
     private const string LobbySceneName = "LobbyScene";
     private const string GameplaySceneName = "GameplayScene";
+    private const int DefaultMineCount = 40;
+    private const int MinMineCount = 5;
+    private const int MaxMineCount = 40;
 
     // Внутреннее состояние экранов, которыми управляет контроллер.
     private enum MenuScreen
@@ -61,6 +64,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
     private string _roomName = "My Room";
     private string _roomPassword = string.Empty;
     private string _playerName = "Player";
+    private string _mineCountText = DefaultMineCount.ToString();
     private string _status = "Connect to the relay server and create or join a room.";
     private string _connectedRoomName = string.Empty;
     private string _roomState = "waiting_for_player";
@@ -68,6 +72,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
     private bool _isPrivateRoom;
     private bool _isHost;
     private bool _canStartGame;
+    private int _mineCount = DefaultMineCount;
     private MenuScreen _lastLoggedScreen;
     private string _lastLoggedRoomState = string.Empty;
     private bool _lastLoggedIsHost;
@@ -344,6 +349,8 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
         _roomState = string.IsNullOrWhiteSpace(message.RoomState) ? "waiting_for_player" : message.RoomState;
         _isHost = message.IsHost;
         _canStartGame = message.CanStartGame;
+        _mineCount = SanitizeMineCount(message.MineCount);
+        _mineCountText = _mineCount.ToString();
 
         if (_roomState != "in_game")
         {
@@ -379,6 +386,16 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
         }
 
         return "Waiting for the host to start the match.";
+    }
+
+    private static int SanitizeMineCount(int value)
+    {
+        if (value <= 0)
+        {
+            return DefaultMineCount;
+        }
+
+        return Mathf.Clamp(value, MinMineCount, MaxMineCount);
     }
 
     private string GetScenarioLabel()

@@ -30,6 +30,10 @@ public sealed partial class CoopPrototypeController
     public string ConnectedRoomName => _connectedRoomName;
     public string RoomPassword => _roomPassword;
     public string PlayerName => _playerName;
+    public string MineCountText => _mineCountText;
+    public int MineCount => _mineCount;
+    public int MinAllowedMineCount => MinMineCount;
+    public int MaxAllowedMineCount => MaxMineCount;
     public int LocalPlayerId => _localPlayerId;
     public string AccessLabel => _isPrivateRoom ? "Password protected" : "Public";
     public string ActiveRoomDisplayName => string.IsNullOrWhiteSpace(_connectedRoomName) ? _roomCode : _connectedRoomName;
@@ -161,6 +165,11 @@ public sealed partial class CoopPrototypeController
     public void SetRoomPassword(string value)
     {
         _roomPassword = value ?? string.Empty;
+    }
+
+    public void SetMineCountText(string value)
+    {
+        _mineCountText = value ?? string.Empty;
     }
 
     public void SetPrivateRoom(bool value)

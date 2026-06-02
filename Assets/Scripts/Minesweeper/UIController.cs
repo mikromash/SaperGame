@@ -19,13 +19,16 @@ namespace Minesweeper
         private TextMeshProUGUI _timerLabel;
         private TimerPulseAnimator _timerPulseAnimator;
         private TextMeshProUGUI _flagsLabel;
+        private TextMeshProUGUI _bombsLabel;
         private TextMeshProUGUI _stateLabel;
         private Button _restartButton;
         private Toggle _debugRevealBombsToggle;
+        private Toggle _debugHighlightMovedBombToggle;
         private float _nextRoomInfoRefreshTime;
         private int _lastElapsedSeconds = -1;
         private int _lastFlaggedCells = -1;
         private int _lastBombsTotal = -1;
+        private int _lastBombsOnField = -1;
         private bool _lastCanToggleFlags;
         private bool _lastGameFinished;
         private bool _lastCountdownWarningActive;
@@ -178,7 +181,7 @@ namespace Minesweeper
 
         private void CreateIndicatorsPanel(Transform parent)
         {
-            RectTransform panel = CreateHudPanel(parent, "IndicatorsPanel", new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18f, -18f), new Vector2(250f, 86f));
+            RectTransform panel = CreateHudPanel(parent, "IndicatorsPanel", new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18f, -18f), new Vector2(280f, 126f));
             VerticalLayoutGroup layout = panel.gameObject.AddComponent<VerticalLayoutGroup>();
             layout.padding = new RectOffset(14, 14, 10, 10);
             layout.spacing = 6f;
@@ -188,12 +191,13 @@ namespace Minesweeper
             layout.childForceExpandHeight = false;
 
             _flagsLabel = AddHudText(panel, "Flags", "Flags: 0/0", 22f, FontStyles.Bold, TextAlignmentOptions.Right);
+            _bombsLabel = AddHudText(panel, "Bombs", "Bombs: 0", 22f, FontStyles.Bold, TextAlignmentOptions.Right);
             _stateLabel = AddHudText(panel, "State", "Ready", 17f, FontStyles.Normal, TextAlignmentOptions.Right);
         }
 
         private void CreateDebugPanel(Transform parent)
         {
-            RectTransform panel = CreateHudPanel(parent, "DebugPanel", new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(270f, 138f));
+            RectTransform panel = CreateHudPanel(parent, "DebugPanel", new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(300f, 184f));
             VerticalLayoutGroup layout = panel.gameObject.AddComponent<VerticalLayoutGroup>();
             layout.padding = new RectOffset(14, 14, 10, 10);
             layout.spacing = 8f;
@@ -205,6 +209,7 @@ namespace Minesweeper
             AddHudText(panel, "DebugTitle", "Test Block", 18f, FontStyles.Bold, TextAlignmentOptions.Left);
             CreateDebugWinButton(panel);
             _debugRevealBombsToggle = CreateDebugRevealToggle(panel);
+            _debugHighlightMovedBombToggle = CreateDebugHighlightMovedBombToggle(panel);
         }
 
         private RectTransform CreateHudPanel(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 position, Vector2 size)
@@ -290,7 +295,7 @@ namespace Minesweeper
             rectTransform.anchorMin = new Vector2(1f, 1f);
             rectTransform.anchorMax = new Vector2(1f, 1f);
             rectTransform.pivot = new Vector2(1f, 1f);
-            rectTransform.anchoredPosition = new Vector2(-18f, -116f);
+            rectTransform.anchoredPosition = new Vector2(-18f, -156f);
             rectTransform.sizeDelta = new Vector2(170f, 46f);
 
             Image image = buttonObject.AddComponent<Image>();
@@ -386,6 +391,55 @@ namespace Minesweeper
             return toggle;
         }
 
+        private Toggle CreateDebugHighlightMovedBombToggle(Transform parent)
+        {
+            GameObject toggleObject = new GameObject("DebugHighlightMovedBombToggle");
+            toggleObject.transform.SetParent(parent, false);
+            RectTransform toggleRect = toggleObject.AddComponent<RectTransform>();
+            toggleRect.sizeDelta = new Vector2(0f, 36f);
+
+            Image rowBackground = toggleObject.AddComponent<Image>();
+            rowBackground.color = new Color(0f, 0f, 0f, 0f);
+
+            Toggle toggle = toggleObject.AddComponent<Toggle>();
+            toggle.targetGraphic = rowBackground;
+            toggle.onValueChanged.AddListener(OnDebugHighlightMovedBombChanged);
+
+            HorizontalLayoutGroup layout = toggleObject.AddComponent<HorizontalLayoutGroup>();
+            layout.spacing = 8f;
+            layout.childAlignment = TextAnchor.MiddleLeft;
+            layout.childControlHeight = true;
+            layout.childControlWidth = false;
+            layout.childForceExpandHeight = false;
+            layout.childForceExpandWidth = false;
+
+            GameObject boxObject = new GameObject("Checkbox");
+            boxObject.transform.SetParent(toggleObject.transform, false);
+            RectTransform boxRect = boxObject.AddComponent<RectTransform>();
+            boxRect.sizeDelta = new Vector2(30f, 30f);
+
+            Image background = boxObject.AddComponent<Image>();
+            background.color = new Color(0.2f, 0.22f, 0.27f, 1f);
+
+            GameObject checkObject = new GameObject("Checkmark");
+            checkObject.transform.SetParent(boxObject.transform, false);
+            RectTransform checkRect = checkObject.AddComponent<RectTransform>();
+            checkRect.anchorMin = new Vector2(0.2f, 0.2f);
+            checkRect.anchorMax = new Vector2(0.8f, 0.8f);
+            checkRect.offsetMin = Vector2.zero;
+            checkRect.offsetMax = Vector2.zero;
+
+            Image checkmark = checkObject.AddComponent<Image>();
+            checkmark.color = new Color(1f, 0.84f, 0.05f, 1f);
+
+            toggle.graphic = checkmark;
+
+            TextMeshProUGUI label = AddHudText(toggleObject.transform, "Label", "Highlight moved bomb", 17f, FontStyles.Normal, TextAlignmentOptions.Left);
+            label.rectTransform.sizeDelta = new Vector2(230f, 30f);
+            label.raycastTarget = true;
+            return toggle;
+        }
+
         private void RefreshGameplayHud()
         {
             if (_gameController == null)
@@ -402,11 +456,14 @@ namespace Minesweeper
 
             int flaggedCells = _gameController.FlaggedCells;
             int bombsTotal = _gameController.BombsTotal;
-            if (flaggedCells != _lastFlaggedCells || bombsTotal != _lastBombsTotal)
+            int bombsOnField = _gameController.BombsOnField;
+            if (flaggedCells != _lastFlaggedCells || bombsTotal != _lastBombsTotal || bombsOnField != _lastBombsOnField)
             {
                 _lastFlaggedCells = flaggedCells;
                 _lastBombsTotal = bombsTotal;
+                _lastBombsOnField = bombsOnField;
                 SetText(_flagsLabel, $"Flags: {flaggedCells}/{bombsTotal}");
+                SetText(_bombsLabel, $"Bombs: {bombsOnField}");
             }
 
             bool canToggleFlags = _gameController.CanToggleFlags;
@@ -428,6 +485,11 @@ namespace Minesweeper
             if (_debugRevealBombsToggle != null && _debugRevealBombsToggle.isOn != _gameController.DebugRevealBombs)
             {
                 _debugRevealBombsToggle.SetIsOnWithoutNotify(_gameController.DebugRevealBombs);
+            }
+
+            if (_debugHighlightMovedBombToggle != null && _debugHighlightMovedBombToggle.isOn != _gameController.DebugHighlightMovedBomb)
+            {
+                _debugHighlightMovedBombToggle.SetIsOnWithoutNotify(_gameController.DebugHighlightMovedBomb);
             }
         }
 
@@ -524,6 +586,11 @@ namespace Minesweeper
         private void OnDebugRevealBombsChanged(bool revealBombs)
         {
             _gameController?.SetDebugRevealBombs(revealBombs);
+        }
+
+        private void OnDebugHighlightMovedBombChanged(bool highlightMovedBomb)
+        {
+            _gameController?.SetDebugHighlightMovedBomb(highlightMovedBomb);
         }
     }
 }

@@ -17,6 +17,13 @@ public sealed partial class CoopPrototypeController
             return;
         }
 
+        if (!TryValidateMineCount(out int mineCount, out string mineCountError))
+        {
+            AudioController.Play(AudioEvent.UiError);
+            _status = mineCountError;
+            return;
+        }
+
         ShutdownSession();
         ClearAvatars();
 
@@ -56,7 +63,8 @@ public sealed partial class CoopPrototypeController
             SanitizePlayerName(_playerName),
             roomName,
             _scenario == ConnectionScenario.Network ? _isPrivateRoom : !string.IsNullOrWhiteSpace(roomPassword),
-            roomPassword);
+            roomPassword,
+            mineCount);
 
         if (!connected)
         {
@@ -75,6 +83,8 @@ public sealed partial class CoopPrototypeController
         _roomState = "waiting_for_player";
         _isHost = true;
         _canStartGame = false;
+        _mineCount = mineCount;
+        _mineCountText = mineCount.ToString();
         _status = BuildRoomStatus();
         AudioController.Play(AudioEvent.RoomCreated);
         UnityEngine.Debug.Log($"[CoopLobby] Host created room. roomCode={_roomCode}, localPlayerId={_localPlayerId}, nextScreen={MenuScreen.WaitingRoom}, scenario={_scenario}");
@@ -218,6 +228,38 @@ public sealed partial class CoopPrototypeController
     {
         // Принимаем только валидный пользовательский порт.
         return int.TryParse(_portText, out port) && port > 0 && port <= 65535;
+    }
+
+    private bool TryValidateMineCount(out int mineCount, out string error)
+    {
+        mineCount = DefaultMineCount;
+
+        if (string.IsNullOrWhiteSpace(_mineCountText))
+        {
+            error = $"Mine count is required. Enter a number from {MinMineCount} to {MaxMineCount}.";
+            return false;
+        }
+
+        if (!int.TryParse(_mineCountText.Trim(), out mineCount))
+        {
+            error = $"Mine count must be a whole number from {MinMineCount} to {MaxMineCount}.";
+            return false;
+        }
+
+        if (mineCount < MinMineCount)
+        {
+            error = $"Mine count must be at least {MinMineCount}.";
+            return false;
+        }
+
+        if (mineCount > MaxMineCount)
+        {
+            error = $"Mine count must be no more than {MaxMineCount}.";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
     }
 
     private static string SanitizePlayerName(string value)

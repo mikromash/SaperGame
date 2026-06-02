@@ -49,6 +49,8 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     [SerializeField] private TMP_InputField createRoomNameInput;   
     [SerializeField] private TMP_InputField createRoomCodeInput;   
     [SerializeField] private TMP_InputField createPasswordInput;
+    [SerializeField] private TMP_InputField createMineCountInput;
+    [SerializeField] private TMP_Text createMineCountErrorText;
     [SerializeField] private Toggle publicRoomToggle;              
     [SerializeField] private Toggle passwordRoomToggle;            
     [SerializeField] private Button startRoomButton;
@@ -92,6 +94,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         CoopUserSettings.ApplyAll();
         CoopUserSettings.ScreenModeChanged += HandleScreenModeChanged;
         EnsureRuntimeSettingsControls();
+        EnsureCanvasRenderers();
         RefreshSettingsControls();
         BindListeners();
         InitializeToggles(); 
@@ -303,6 +306,8 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         SetInputTextWithoutNotify(joinLocalHostAddressInput, _controller.LocalHostAddress);
         SetInputTextWithoutNotify(createPortInput, _controller.PortText);
         SetInputTextWithoutNotify(joinPortInput, _controller.PortText);
+        SetInputTextWithoutNotify(createMineCountInput, _controller.MineCountText);
+        RefreshMineCountValidationMessage();
     }
 
     private void UpdatePasswordVisibility()
@@ -522,6 +527,16 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
                 UpdatePasswordVisibility();
             });
         }
+
+        if (createMineCountInput != null)
+        {
+            createMineCountInput.contentType = TMP_InputField.ContentType.IntegerNumber;
+            createMineCountInput.characterLimit = 2;
+            createMineCountInput.onValueChanged.AddListener(value => {
+                _controller?.SetMineCountText(value);
+                RefreshMineCountValidationMessage();
+            });
+        }
     }
 
     // --- КОРУТИНА: Ефект кнопки копіювання ---
@@ -726,6 +741,74 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         return slider;
     }
 
+    private void EnsureCanvasRenderers()
+    {
+        EnsureCanvasRenderers(mainMenuScreen);
+        EnsureCanvasRenderers(settingsScreen);
+        EnsureCanvasRenderers(connectionTypeScreen);
+        EnsureCanvasRenderers(createRoomScreen);
+        EnsureCanvasRenderers(joinRoomScreen);
+        EnsureCanvasRenderers(waitingRoomScreen);
+    }
+
+    private static void EnsureCanvasRenderers(GameObject root)
+    {
+        if (root == null)
+        {
+            return;
+        }
+
+        MaskableGraphic[] graphics = root.GetComponentsInChildren<MaskableGraphic>(true);
+        for (int index = 0; index < graphics.Length; index++)
+        {
+            MaskableGraphic graphic = graphics[index];
+            if (graphic != null && graphic.GetComponent<CanvasRenderer>() == null)
+            {
+                graphic.gameObject.AddComponent<CanvasRenderer>();
+            }
+        }
+    }
+
+    private void RefreshMineCountValidationMessage()
+    {
+        if (createMineCountErrorText == null || _controller == null)
+        {
+            return;
+        }
+
+        string value = createMineCountInput != null ? createMineCountInput.text : _controller.MineCountText;
+        string error = GetMineCountValidationError(value);
+        createMineCountErrorText.text = error;
+    }
+
+    private string GetMineCountValidationError(string value)
+    {
+        int min = _controller != null ? _controller.MinAllowedMineCount : 5;
+        int max = _controller != null ? _controller.MaxAllowedMineCount : 40;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return $"Enter mines count ({min}-{max}).";
+        }
+
+        if (!int.TryParse(value.Trim(), out int parsed))
+        {
+            return $"Mines must be a whole number ({min}-{max}).";
+        }
+
+        if (parsed < min)
+        {
+            return $"Mines count must be at least {min}.";
+        }
+
+        if (parsed > max)
+        {
+            return $"Mines count must be no more than {max}.";
+        }
+
+        return string.Empty;
+    }
+
     private void OnStartRoomClicked()
     {
         if (_controller == null) return;
@@ -733,6 +816,8 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
 
         _controller.SetPlayerName(createPlayerNameInput != null ? createPlayerNameInput.text : "Player");
         _controller.SetRoomPassword(createPasswordInput != null ? createPasswordInput.text : "");
+        _controller.SetMineCountText(createMineCountInput != null ? createMineCountInput.text : _controller.MineCountText);
+        RefreshMineCountValidationMessage();
         
         if (_controller.IsLocalScenario)
         {

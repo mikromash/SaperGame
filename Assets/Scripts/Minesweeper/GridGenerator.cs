@@ -111,8 +111,10 @@ namespace Minesweeper
             }
         }
 
-        public bool MoveBombFromFirstOpen(Cell firstCell)
+        public bool MoveBombFromFirstOpen(Cell firstCell, out Cell movedBombCell)
         {
+            movedBombCell = null;
+
             if (_grid == null || firstCell == null || !firstCell.hasBomb)
             {
                 return false;
@@ -124,7 +126,7 @@ namespace Minesweeper
                 for (int y = 0; y < _height; y++)
                 {
                     Cell candidate = _grid[x, y];
-                    if (candidate == null || candidate.hasBomb || candidate == firstCell)
+                    if (candidate == null || candidate.hasBomb || candidate.isOpened || candidate.isFlagged || candidate == firstCell)
                     {
                         continue;
                     }
@@ -133,15 +135,17 @@ namespace Minesweeper
                 }
             }
 
-            firstCell.hasBomb = false;
-
-            if (validTargets.Count > 0)
+            if (validTargets.Count == 0)
             {
-                System.Random firstClickRandom = new System.Random(GetFirstClickSeed(firstCell));
-                Cell target = validTargets[firstClickRandom.Next(validTargets.Count)];
-                target.hasBomb = true;
+                return false;
             }
 
+            System.Random firstClickRandom = new System.Random(GetFirstClickSeed(firstCell));
+            Cell target = validTargets[firstClickRandom.Next(validTargets.Count)];
+
+            firstCell.hasBomb = false;
+            target.hasBomb = true;
+            movedBombCell = target;
             CalculateNeighbours();
             return true;
         }

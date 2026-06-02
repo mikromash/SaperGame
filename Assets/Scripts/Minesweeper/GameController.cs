@@ -11,10 +11,12 @@ namespace Minesweeper
         private const string DebugWinAction = "debug_win";
         private const string DebugRevealBombsOnAction = "debug_reveal_bombs_on";
         private const string DebugRevealBombsOffAction = "debug_reveal_bombs_off";
+        private const string DebugHighlightMovedBombOnAction = "debug_highlight_moved_bomb_on";
+        private const string DebugHighlightMovedBombOffAction = "debug_highlight_moved_bomb_off";
         private const string GameplaySceneName = "GameplayScene";
         private const int GridWidth = 16;
         private const int GridHeight = 16;
-        private const int BombCount = 40;
+        private const int DefaultBombCount = 40;
         private const float CellSize = 3f;
         private const int GameDurationSeconds = 120;
 
@@ -30,6 +32,9 @@ namespace Minesweeper
         private bool _isApplyingNetworkCommand;
         private bool _hasOpenedFirstCell;
         private bool _debugRevealBombs;
+        private bool _debugHighlightMovedBomb;
+        private Cell _movedBombCell;
+        private int _bombCount = DefaultBombCount;
         private float _elapsedTime;
         private int _elapsedSeconds;
 
@@ -57,7 +62,9 @@ namespace Minesweeper
         public bool CanToggleFlags => _hasOpenedFirstCell && !_isGameFinished;
         public bool IsGameFinished => _isGameFinished;
         public bool DebugRevealBombs => _debugRevealBombs;
-        public int BombsTotal => BombCount;
+        public bool DebugHighlightMovedBomb => _debugHighlightMovedBomb;
+        public int BombsTotal => _bombCount;
+        public int BombsOnField => CountBombsOnField();
         public int GameTimeLimitSeconds => GameDurationSeconds;
         public int ElapsedSeconds => _elapsedSeconds;
         public int RemainingSeconds => Mathf.Max(0, GameDurationSeconds - _elapsedSeconds);
@@ -239,6 +246,23 @@ namespace Minesweeper
             SetDebugRevealBombsInternal(revealBombs);
         }
 
+        public void SetDebugHighlightMovedBomb(bool highlightMovedBomb)
+        {
+            if (_grid == null)
+            {
+                return;
+            }
+
+            if (ShouldSendNetworkCommand)
+            {
+                string action = highlightMovedBomb ? DebugHighlightMovedBombOnAction : DebugHighlightMovedBombOffAction;
+                CoopPrototypeController.Instance?.SendMinesweeperCommand(action);
+                return;
+            }
+
+            SetDebugHighlightMovedBombInternal(highlightMovedBomb);
+        }
+
         public void HandleNetworkCommand(string action, int cellX, int cellY, int boardSeed)
         {
             _isApplyingNetworkCommand = true;
@@ -266,6 +290,18 @@ namespace Minesweeper
                 if (string.Equals(action, DebugRevealBombsOffAction, System.StringComparison.Ordinal))
                 {
                     SetDebugRevealBombsInternal(false);
+                    return;
+                }
+
+                if (string.Equals(action, DebugHighlightMovedBombOnAction, System.StringComparison.Ordinal))
+                {
+                    SetDebugHighlightMovedBombInternal(true);
+                    return;
+                }
+
+                if (string.Equals(action, DebugHighlightMovedBombOffAction, System.StringComparison.Ordinal))
+                {
+                    SetDebugHighlightMovedBombInternal(false);
                     return;
                 }
 
@@ -344,7 +380,7 @@ namespace Minesweeper
                 return;
             }
 
-            if (!cell.isFlagged && FlaggedCells >= BombCount)
+            if (!cell.isFlagged && FlaggedCells >= _bombCount)
             {
                 AudioController.Play(AudioEvent.CellBlocked);
                 return;
@@ -389,16 +425,20 @@ namespace Minesweeper
             _isGameFinished = false;
             _hasOpenedFirstCell = false;
             _debugRevealBombs = false;
+            _debugHighlightMovedBomb = false;
+            _movedBombCell = null;
             _elapsedTime = 0f;
             _elapsedSeconds = 0;
             StopCountdownAudio();
             CoopPrototypeController.Instance?.ResetPlayersToMinesweeperStart();
-            _gridGenerator = new GridGenerator(GridWidth, GridHeight, BombCount, seed);
+            _bombCount = GetConfiguredBombCount();
+            _gridGenerator = new GridGenerator(GridWidth, GridHeight, _bombCount, seed);
             _grid = _gridGenerator.CreateGrid();
             _floodFillSystem = new FloodFillSystem(_grid);
 
             _gridView.Build(_grid, CellSize);
             _gridView.SetRevealBombs(false);
+            _gridView.SetMovedBombHighlight(null, false);
             _uiController.HideState();
             NotifyHudStateChanged();
 
@@ -461,6 +501,28 @@ namespace Minesweeper
             return count;
         }
 
+        private int CountBombsOnField()
+        {
+            if (_grid == null)
+            {
+                return 0;
+            }
+
+            int count = 0;
+            for (int x = 0; x < _grid.GetLength(0); x++)
+            {
+                for (int y = 0; y < _grid.GetLength(1); y++)
+                {
+                    if (_grid[x, y].hasBomb)
+                    {
+                        count++;
+                    }
+                }
+            }
+
+            return count;
+        }
+
         private void EnsureFirstOpenIsSafe(Cell cell)
         {
             if (_hasOpenedFirstCell || cell == null || !cell.hasBomb || _gridGenerator == null)
@@ -468,7 +530,11 @@ namespace Minesweeper
                 return;
             }
 
-            _gridGenerator.MoveBombFromFirstOpen(cell);
+            if (_gridGenerator.MoveBombFromFirstOpen(cell, out Cell movedBombCell))
+            {
+                _movedBombCell = movedBombCell;
+                RefreshMovedBombHighlight();
+            }
         }
 
         private void SetDebugRevealBombsInternal(bool revealBombs)
@@ -481,6 +547,28 @@ namespace Minesweeper
             _debugRevealBombs = revealBombs;
             _gridView.SetRevealBombs(revealBombs);
             NotifyHudStateChanged();
+        }
+
+        private void SetDebugHighlightMovedBombInternal(bool highlightMovedBomb)
+        {
+            if (_debugHighlightMovedBomb == highlightMovedBomb)
+            {
+                return;
+            }
+
+            _debugHighlightMovedBomb = highlightMovedBomb;
+            RefreshMovedBombHighlight();
+            NotifyHudStateChanged();
+        }
+
+        private void RefreshMovedBombHighlight()
+        {
+            if (_gridView == null)
+            {
+                return;
+            }
+
+            _gridView.SetMovedBombHighlight(_movedBombCell, _debugHighlightMovedBomb);
         }
 
         private void EndGame(bool isWin)
@@ -533,5 +621,11 @@ namespace Minesweeper
         }
 
         private bool ShouldSendNetworkCommand => IsCoopSynchronizedGame && !_isApplyingNetworkCommand;
+
+        private static int GetConfiguredBombCount()
+        {
+            CoopPrototypeController controller = CoopPrototypeController.Instance;
+            return controller != null ? controller.MineCount : DefaultBombCount;
+        }
     }
 }

@@ -44,6 +44,9 @@ internal sealed class RelayServer : IDisposable
     private const string RoomStateWaitingForPlayer = "waiting_for_player";
     private const string RoomStatePlayerJoined = "player_joined";
     private const string RoomStateInGame = "in_game";
+    private const int DefaultMineCount = 40;
+    private const int MinMineCount = 5;
+    private const int MaxMineCount = 40;
 
     private static readonly object RoomCodeLock = new object();
     private static readonly Random RoomCodeRandom = new Random();
@@ -196,6 +199,7 @@ internal sealed class RelayServer : IDisposable
                 RoomState = room.State,
                 IsHost = player.PlayerId == 1,
                 CanStartGame = player.PlayerId == 1 && room.State == RoomStatePlayerJoined,
+                MineCount = room.MineCount,
                 Players = room.BuildSnapshot()
             });
 
@@ -308,7 +312,8 @@ internal sealed class RelayServer : IDisposable
                 roomCode,
                 string.IsNullOrWhiteSpace(request.RoomName) ? "Local Room" : request.RoomName.Trim(),
                 request.IsPrivate,
-                request.IsPrivate ? request.Password ?? string.Empty : string.Empty);
+                request.IsPrivate ? request.Password ?? string.Empty : string.Empty,
+                SanitizeMineCount(request.MineCount));
             player = room.AddPlayer(string.IsNullOrWhiteSpace(request.PlayerName) ? "Player" : request.PlayerName.Trim());
             _rooms[roomCode] = room;
             Console.WriteLine($"Room created: {roomCode}, private={room.IsPrivate}");
@@ -362,6 +367,16 @@ internal sealed class RelayServer : IDisposable
     {
         writer.WriteLine(JsonRelay.ToJson(message));
     }
+
+    private static int SanitizeMineCount(int value)
+    {
+        if (value <= 0)
+        {
+            return DefaultMineCount;
+        }
+
+        return Math.Clamp(value, MinMineCount, MaxMineCount);
+    }
 }
 
 internal sealed class RelayRoom : IDisposable
@@ -374,18 +389,20 @@ internal sealed class RelayRoom : IDisposable
     private readonly Dictionary<int, RelayPlayer> _players = new Dictionary<int, RelayPlayer>();
     private readonly Dictionary<int, RelayConnection> _connections = new Dictionary<int, RelayConnection>();
 
-    public RelayRoom(string roomCode, string roomName, bool isPrivate, string password)
+    public RelayRoom(string roomCode, string roomName, bool isPrivate, string password, int mineCount)
     {
         RoomCode = roomCode;
         RoomName = roomName;
         IsPrivate = isPrivate;
         Password = password ?? string.Empty;
+        MineCount = mineCount;
         State = RoomStateWaitingForPlayer;
     }
 
     public string RoomCode { get; }
     public string RoomName { get; }
     public bool IsPrivate { get; }
+    public int MineCount { get; }
     public string State { get; private set; }
     private string Password { get; }
 
@@ -655,6 +672,7 @@ internal sealed class RelayRoom : IDisposable
             RoomState = State,
             IsHost = recipientPlayerId == 1,
             CanStartGame = recipientPlayerId == 1 && State == RoomStatePlayerJoined,
+            MineCount = MineCount,
             Players = snapshot
         };
     }
@@ -784,6 +802,7 @@ internal sealed class CoopNetworkMessage
     public bool IsHost;
     public bool CanStartGame;
     public long PingTicks;
+    public int MineCount = 40;
     public string MinesweeperAction = string.Empty;
     public int CellX = -1;
     public int CellY = -1;
