@@ -14,8 +14,7 @@ namespace Minesweeper
         private const string DebugHighlightMovedBombOnAction = "debug_highlight_moved_bomb_on";
         private const string DebugHighlightMovedBombOffAction = "debug_highlight_moved_bomb_off";
         private const string GameplaySceneName = "GameplayScene";
-        private const int GridWidth = 16;
-        private const int GridHeight = 16;
+        private const int DefaultGridSize = 16;
         private const int DefaultBombCount = 40;
         private const float CellSize = 3f;
         private const int GameDurationSeconds = 120;
@@ -35,6 +34,7 @@ namespace Minesweeper
         private bool _debugHighlightMovedBomb;
         private Cell _movedBombCell;
         private int _bombCount = DefaultBombCount;
+        private int _gridSize = DefaultGridSize;
         private float _elapsedTime;
         private int _elapsedSeconds;
 
@@ -431,8 +431,9 @@ namespace Minesweeper
             _elapsedSeconds = 0;
             StopCountdownAudio();
             CoopPrototypeController.Instance?.ResetPlayersToMinesweeperStart();
-            _bombCount = GetConfiguredBombCount();
-            _gridGenerator = new GridGenerator(GridWidth, GridHeight, _bombCount, seed);
+            _gridSize = GetConfiguredGridSize();
+            _bombCount = Mathf.Min(GetConfiguredBombCount(), (_gridSize * _gridSize) - 1);
+            _gridGenerator = new GridGenerator(_gridSize, _gridSize, _bombCount, seed);
             _grid = _gridGenerator.CreateGrid();
             _floodFillSystem = new FloodFillSystem(_grid);
 
@@ -626,6 +627,12 @@ namespace Minesweeper
         {
             CoopPrototypeController controller = CoopPrototypeController.Instance;
             return controller != null ? controller.MineCount : DefaultBombCount;
+        }
+
+        private static int GetConfiguredGridSize()
+        {
+            CoopPrototypeController controller = CoopPrototypeController.Instance;
+            return controller != null ? controller.FieldSize : DefaultGridSize;
         }
     }
 }

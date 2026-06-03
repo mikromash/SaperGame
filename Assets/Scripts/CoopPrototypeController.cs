@@ -15,6 +15,7 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
     private const int DefaultMineCount = 40;
     private const int MinMineCount = 5;
     private const int MaxMineCount = 40;
+    private const int DefaultFieldSize = 16;
 
     // Внутреннее состояние экранов, которыми управляет контроллер.
     private enum MenuScreen
@@ -65,6 +66,8 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
     private string _roomPassword = string.Empty;
     private string _playerName = "Player";
     private string _mineCountText = DefaultMineCount.ToString();
+    private int _fieldSize = DefaultFieldSize;
+    private bool _hasSelectedFieldSize;
     private string _status = "Connect to the relay server and create or join a room.";
     private string _connectedRoomName = string.Empty;
     private string _roomState = "waiting_for_player";
@@ -351,6 +354,8 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
         _canStartGame = message.CanStartGame;
         _mineCount = SanitizeMineCount(message.MineCount);
         _mineCountText = _mineCount.ToString();
+        _fieldSize = SanitizeFieldSize(message.FieldSize);
+        _hasSelectedFieldSize = IsValidFieldSize(message.FieldSize);
 
         if (_roomState != "in_game")
         {
@@ -396,6 +401,16 @@ public sealed partial class CoopPrototypeController : MonoBehaviour
         }
 
         return Mathf.Clamp(value, MinMineCount, MaxMineCount);
+    }
+
+    private static int SanitizeFieldSize(int value)
+    {
+        return IsValidFieldSize(value) ? value : DefaultFieldSize;
+    }
+
+    private static bool IsValidFieldSize(int value)
+    {
+        return value == 12 || value == 16 || value == 20;
     }
 
     private string GetScenarioLabel()

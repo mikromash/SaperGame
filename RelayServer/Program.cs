@@ -200,6 +200,7 @@ internal sealed class RelayServer : IDisposable
                 IsHost = player.PlayerId == 1,
                 CanStartGame = player.PlayerId == 1 && room.State == RoomStatePlayerJoined,
                 MineCount = room.MineCount,
+                FieldSize = room.FieldSize,
                 Players = room.BuildSnapshot()
             });
 
@@ -307,13 +308,26 @@ internal sealed class RelayServer : IDisposable
 
         if (request.Type == "CreateRoomRequest")
         {
+            if (request.FieldSize == 0)
+            {
+                error = "Field size is not specified";
+                return false;
+            }
+
+            if (!IsValidFieldSize(request.FieldSize))
+            {
+                error = "Invalid field size.";
+                return false;
+            }
+
             string roomCode = CreateUniqueRoomCode();
             room = new RelayRoom(
                 roomCode,
                 string.IsNullOrWhiteSpace(request.RoomName) ? "Local Room" : request.RoomName.Trim(),
                 request.IsPrivate,
                 request.IsPrivate ? request.Password ?? string.Empty : string.Empty,
-                SanitizeMineCount(request.MineCount));
+                SanitizeMineCount(request.MineCount),
+                request.FieldSize);
             player = room.AddPlayer(string.IsNullOrWhiteSpace(request.PlayerName) ? "Player" : request.PlayerName.Trim());
             _rooms[roomCode] = room;
             Console.WriteLine($"Room created: {roomCode}, private={room.IsPrivate}");
@@ -377,6 +391,11 @@ internal sealed class RelayServer : IDisposable
 
         return Math.Clamp(value, MinMineCount, MaxMineCount);
     }
+
+    private static bool IsValidFieldSize(int fieldSize)
+    {
+        return fieldSize == 12 || fieldSize == 16 || fieldSize == 20;
+    }
 }
 
 internal sealed class RelayRoom : IDisposable
@@ -389,13 +408,14 @@ internal sealed class RelayRoom : IDisposable
     private readonly Dictionary<int, RelayPlayer> _players = new Dictionary<int, RelayPlayer>();
     private readonly Dictionary<int, RelayConnection> _connections = new Dictionary<int, RelayConnection>();
 
-    public RelayRoom(string roomCode, string roomName, bool isPrivate, string password, int mineCount)
+    public RelayRoom(string roomCode, string roomName, bool isPrivate, string password, int mineCount, int fieldSize)
     {
         RoomCode = roomCode;
         RoomName = roomName;
         IsPrivate = isPrivate;
         Password = password ?? string.Empty;
         MineCount = mineCount;
+        FieldSize = fieldSize;
         State = RoomStateWaitingForPlayer;
     }
 
@@ -403,6 +423,7 @@ internal sealed class RelayRoom : IDisposable
     public string RoomName { get; }
     public bool IsPrivate { get; }
     public int MineCount { get; }
+    public int FieldSize { get; }
     public string State { get; private set; }
     private string Password { get; }
 
@@ -673,6 +694,7 @@ internal sealed class RelayRoom : IDisposable
             IsHost = recipientPlayerId == 1,
             CanStartGame = recipientPlayerId == 1 && State == RoomStatePlayerJoined,
             MineCount = MineCount,
+            FieldSize = FieldSize,
             Players = snapshot
         };
     }
@@ -803,6 +825,7 @@ internal sealed class CoopNetworkMessage
     public bool CanStartGame;
     public long PingTicks;
     public int MineCount = 40;
+    public int FieldSize = 0;
     public string MinesweeperAction = string.Empty;
     public int CellX = -1;
     public int CellY = -1;

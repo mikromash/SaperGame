@@ -24,6 +24,13 @@ public sealed partial class CoopPrototypeController
             return;
         }
 
+        if (!TryValidateFieldSize(out int fieldSize, out string fieldSizeError))
+        {
+            AudioController.Play(AudioEvent.UiError);
+            _status = fieldSizeError;
+            return;
+        }
+
         ShutdownSession();
         ClearAvatars();
 
@@ -64,7 +71,8 @@ public sealed partial class CoopPrototypeController
             roomName,
             _scenario == ConnectionScenario.Network ? _isPrivateRoom : !string.IsNullOrWhiteSpace(roomPassword),
             roomPassword,
-            mineCount);
+            mineCount,
+            fieldSize);
 
         if (!connected)
         {
@@ -85,6 +93,8 @@ public sealed partial class CoopPrototypeController
         _canStartGame = false;
         _mineCount = mineCount;
         _mineCountText = mineCount.ToString();
+        _fieldSize = fieldSize;
+        _hasSelectedFieldSize = true;
         _status = BuildRoomStatus();
         AudioController.Play(AudioEvent.RoomCreated);
         UnityEngine.Debug.Log($"[CoopLobby] Host created room. roomCode={_roomCode}, localPlayerId={_localPlayerId}, nextScreen={MenuScreen.WaitingRoom}, scenario={_scenario}");
@@ -255,6 +265,26 @@ public sealed partial class CoopPrototypeController
         if (mineCount > MaxMineCount)
         {
             error = $"Mine count must be no more than {MaxMineCount}.";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private bool TryValidateFieldSize(out int fieldSize, out string error)
+    {
+        fieldSize = _fieldSize;
+
+        if (!_hasSelectedFieldSize)
+        {
+            error = "Field size is not specified";
+            return false;
+        }
+
+        if (!IsValidFieldSize(fieldSize))
+        {
+            error = "Invalid field size.";
             return false;
         }
 

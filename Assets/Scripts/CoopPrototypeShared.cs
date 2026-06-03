@@ -28,6 +28,7 @@ internal sealed class CoopNetworkMessage
     public bool CanStartGame = false;
     public long PingTicks = 0L;
     public int MineCount = 40;
+    public int FieldSize = 0;
     public string MinesweeperAction = string.Empty;
     public int CellX = -1;
     public int CellY = -1;
@@ -134,7 +135,7 @@ internal sealed class CoopRelayClient
     public int LocalPlayerId { get; private set; }
     public string ConnectedRoomCode { get; private set; }
 
-    public bool CreateRoom(string host, int port, string playerName, string roomName, bool isPrivate, string password, int mineCount)
+    public bool CreateRoom(string host, int port, string playerName, string roomName, bool isPrivate, string password, int mineCount, int fieldSize)
     {
         // Хост запрашивает создание новой комнаты.
         return Connect(host, port, new CoopNetworkMessage
@@ -144,7 +145,8 @@ internal sealed class CoopRelayClient
             RoomName = roomName,
             IsPrivate = isPrivate,
             Password = password ?? string.Empty,
-            MineCount = mineCount
+            MineCount = mineCount,
+            FieldSize = fieldSize
         });
     }
 
@@ -552,6 +554,7 @@ internal sealed class CoopEmbeddedRelayServer
                     IsHost = player.PlayerId == 1,
                     CanStartGame = player.PlayerId == 1 && room.State == RoomStatePlayerJoined,
                     MineCount = room.MineCount,
+                    FieldSize = room.FieldSize,
                     Players = room.BuildSnapshot()
                 });
 
@@ -657,13 +660,26 @@ internal sealed class CoopEmbeddedRelayServer
 
         if (request.Type == "CreateRoomRequest")
         {
+            if (request.FieldSize == 0)
+            {
+                error = "Field size is not specified";
+                return false;
+            }
+
+            if (!IsValidFieldSize(request.FieldSize))
+            {
+                error = "Invalid field size.";
+                return false;
+            }
+
             string roomCode = CreateUniqueRoomCode();
             room = new CoopEmbeddedRelayRoom(
                 roomCode,
                 string.IsNullOrWhiteSpace(request.RoomName) ? "Local Room" : request.RoomName.Trim(),
                 request.IsPrivate,
                 request.IsPrivate ? request.Password ?? string.Empty : string.Empty,
-                request.MineCount);
+                request.MineCount,
+                request.FieldSize);
             player = room.AddPlayer(string.IsNullOrWhiteSpace(request.PlayerName) ? "Player" : request.PlayerName.Trim());
             _rooms[roomCode] = room;
             return true;
@@ -712,6 +728,11 @@ internal sealed class CoopEmbeddedRelayServer
         return new string(chars);
     }
 
+    private static bool IsValidFieldSize(int fieldSize)
+    {
+        return fieldSize == 12 || fieldSize == 16 || fieldSize == 20;
+    }
+
     private static void Send(StreamWriter writer, CoopNetworkMessage message)
     {
         writer.WriteLine(JsonUtility.ToJson(message));
@@ -729,13 +750,14 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
     private readonly Dictionary<int, CoopEmbeddedRelayPlayer> _players = new Dictionary<int, CoopEmbeddedRelayPlayer>();
     private readonly Dictionary<int, CoopEmbeddedRelayConnection> _connections = new Dictionary<int, CoopEmbeddedRelayConnection>();
 
-    public CoopEmbeddedRelayRoom(string roomCode, string roomName, bool isPrivate, string password, int mineCount)
+    public CoopEmbeddedRelayRoom(string roomCode, string roomName, bool isPrivate, string password, int mineCount, int fieldSize)
     {
         RoomCode = roomCode;
         RoomName = roomName;
         IsPrivate = isPrivate;
         Password = password ?? string.Empty;
         MineCount = Mathf.Clamp(mineCount, 5, 40);
+        FieldSize = IsValidFieldSize(fieldSize) ? fieldSize : 16;
         State = RoomStateWaitingForPlayer;
     }
 
@@ -746,6 +768,8 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
     public bool IsPrivate { get; }
 
     public int MineCount { get; }
+
+    public int FieldSize { get; }
 
     private string Password { get; }
 
@@ -991,8 +1015,14 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
             IsHost = recipientPlayerId == 1,
             CanStartGame = recipientPlayerId == 1 && State == RoomStatePlayerJoined,
             MineCount = MineCount,
+            FieldSize = FieldSize,
             Players = snapshot
         };
+    }
+
+    private static bool IsValidFieldSize(int fieldSize)
+    {
+        return fieldSize == 12 || fieldSize == 16 || fieldSize == 20;
     }
 
     private void BroadcastToConnections(

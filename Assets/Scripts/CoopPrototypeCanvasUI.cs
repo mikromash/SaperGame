@@ -51,6 +51,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     [SerializeField] private TMP_InputField createPasswordInput;
     [SerializeField] private TMP_InputField createMineCountInput;
     [SerializeField] private TMP_Text createMineCountErrorText;
+    [SerializeField] private TMP_Dropdown createFieldSizeDropdown;
     [SerializeField] private Toggle publicRoomToggle;              
     [SerializeField] private Toggle passwordRoomToggle;            
     [SerializeField] private Button startRoomButton;
@@ -95,6 +96,8 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         CoopUserSettings.ScreenModeChanged += HandleScreenModeChanged;
         EnsureRuntimeSettingsControls();
         EnsureCanvasRenderers();
+        DisableStartupMouseSensitivityControls();
+        DisableStartupPingControls();
         RefreshSettingsControls();
         BindListeners();
         InitializeToggles(); 
@@ -192,8 +195,8 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     {
         RefreshAudioSliders();
         RefreshScreenModeDropdown();
-        RefreshPingToggle();
-        RefreshMouseSensitivitySlider();
+        DisableStartupMouseSensitivityControls();
+        DisableStartupPingControls();
     }
 
     private void RefreshAudioSliders()
@@ -238,14 +241,6 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
 
         screenModeDropdown.SetValueWithoutNotify((int)CoopUserSettings.ScreenMode);
         screenModeDropdown.RefreshShownValue();
-    }
-
-    private void RefreshPingToggle()
-    {
-        if (showPingToggle != null)
-        {
-            showPingToggle.SetIsOnWithoutNotify(CoopUserSettings.ShowPing);
-        }
     }
 
     private void RefreshMouseSensitivitySlider()
@@ -307,6 +302,7 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         SetInputTextWithoutNotify(createPortInput, _controller.PortText);
         SetInputTextWithoutNotify(joinPortInput, _controller.PortText);
         SetInputTextWithoutNotify(createMineCountInput, _controller.MineCountText);
+        RefreshFieldSizeDropdown();
         RefreshMineCountValidationMessage();
     }
 
@@ -487,30 +483,6 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
             });
         }
 
-        if (showPingToggle != null)
-        {
-            showPingToggle.onValueChanged.AddListener(value => {
-                if (_controller != null)
-                {
-                    _controller.SetShowPing(value);
-                }
-                else
-                {
-                    CoopUserSettings.SetShowPing(value);
-                }
-
-                AudioController.Play(AudioEvent.UiToggle);
-            });
-        }
-
-        if (mouseSensitivitySlider != null)
-        {
-            mouseSensitivitySlider.onValueChanged.AddListener(value => {
-                SettingsManager.SetMouseSensitivity(value);
-                RefreshMouseSensitivityValueText(SettingsManager.MouseSensitivity);
-            });
-        }
-
         if (publicRoomToggle != null)
         {
             publicRoomToggle.onValueChanged.AddListener((isOn) => {
@@ -537,6 +509,14 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
                 RefreshMineCountValidationMessage();
             });
         }
+
+        if (createFieldSizeDropdown != null)
+        {
+            createFieldSizeDropdown.onValueChanged.AddListener(value => {
+                ApplyFieldSizeDropdownValue(value);
+                AudioController.Play(AudioEvent.UiToggle);
+            });
+        }
     }
 
     // --- КОРУТИНА: Ефект кнопки копіювання ---
@@ -561,78 +541,6 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
 
     private void EnsureRuntimeSettingsControls()
     {
-        if (settingsScreen == null || (showPingToggle != null && mouseSensitivitySlider != null && mouseSensitivityValueText != null))
-        {
-            return;
-        }
-
-        Transform existing = settingsScreen.transform.Find("RuntimeSettingsControls");
-        Transform root = existing != null ? existing : CreateSettingsExtensionRoot(settingsScreen.transform);
-
-        if (showPingToggle == null)
-        {
-            showPingToggle = CreatePingToggle(root);
-        }
-
-        if (mouseSensitivitySlider == null || mouseSensitivityValueText == null)
-        {
-            CreateMouseSensitivityControl(root);
-        }
-    }
-
-    private Transform CreateSettingsExtensionRoot(Transform parent)
-    {
-        GameObject rootObject = new GameObject("RuntimeSettingsControls");
-        rootObject.transform.SetParent(parent, false);
-
-        RectTransform rectTransform = rootObject.AddComponent<RectTransform>();
-        rectTransform.anchorMin = new Vector2(0.5f, 0f);
-        rectTransform.anchorMax = new Vector2(0.5f, 0f);
-        rectTransform.pivot = new Vector2(0.5f, 0f);
-        rectTransform.anchoredPosition = new Vector2(0f, 92f);
-        rectTransform.sizeDelta = new Vector2(520f, 118f);
-
-        VerticalLayoutGroup layout = rootObject.AddComponent<VerticalLayoutGroup>();
-        layout.spacing = 12f;
-        layout.childControlWidth = true;
-        layout.childControlHeight = true;
-        layout.childForceExpandWidth = true;
-        layout.childForceExpandHeight = false;
-
-        ContentSizeFitter fitter = rootObject.AddComponent<ContentSizeFitter>();
-        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-        return rootObject.transform;
-    }
-
-    private Toggle CreatePingToggle(Transform parent)
-    {
-        GameObject row = CreateSettingsRow(parent, "ShowPingRow");
-        TMP_Text label = CreateSettingsLabel(row.transform, "Show ping");
-        label.rectTransform.sizeDelta = new Vector2(390f, 34f);
-
-        GameObject toggleObject = new GameObject("ShowPingToggle");
-        toggleObject.transform.SetParent(row.transform, false);
-        RectTransform toggleRect = toggleObject.AddComponent<RectTransform>();
-        toggleRect.sizeDelta = new Vector2(34f, 34f);
-
-        Image background = toggleObject.AddComponent<Image>();
-        background.color = new Color(0.12f, 0.13f, 0.15f, 0.95f);
-
-        GameObject checkObject = new GameObject("Checkmark");
-        checkObject.transform.SetParent(toggleObject.transform, false);
-        RectTransform checkRect = checkObject.AddComponent<RectTransform>();
-        checkRect.anchorMin = new Vector2(0.18f, 0.18f);
-        checkRect.anchorMax = new Vector2(0.82f, 0.82f);
-        checkRect.offsetMin = Vector2.zero;
-        checkRect.offsetMax = Vector2.zero;
-
-        Image checkmark = checkObject.AddComponent<Image>();
-        checkmark.color = new Color(0.25f, 0.8f, 0.45f, 1f);
-
-        Toggle toggle = toggleObject.AddComponent<Toggle>();
-        toggle.targetGraphic = background;
-        toggle.graphic = checkmark;
-        return toggle;
     }
 
     private void CreateMouseSensitivityControl(Transform parent)
@@ -769,6 +677,59 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         }
     }
 
+    private void DisableStartupMouseSensitivityControls()
+    {
+        SetActive(mouseSensitivitySlider, false);
+        SetActive(mouseSensitivityValueText, false);
+
+        if (mouseSensitivitySlider != null)
+        {
+            Transform row = mouseSensitivitySlider.transform.parent;
+            if (row != null && row.name == "MouseSensitivityRow")
+            {
+                SetActive(row.gameObject, false);
+            }
+        }
+
+        if (settingsScreen == null)
+        {
+            return;
+        }
+
+        Transform runtimeControls = settingsScreen.transform.Find("RuntimeSettingsControls");
+        Transform runtimeRow = runtimeControls != null ? runtimeControls.Find("MouseSensitivityRow") : null;
+        if (runtimeRow != null)
+        {
+            SetActive(runtimeRow.gameObject, false);
+        }
+    }
+
+    private void DisableStartupPingControls()
+    {
+        SetActive(showPingToggle, false);
+
+        if (showPingToggle != null)
+        {
+            Transform row = showPingToggle.transform.parent;
+            if (row != null && row.name == "ShowPingRow")
+            {
+                SetActive(row.gameObject, false);
+            }
+        }
+
+        if (settingsScreen == null)
+        {
+            return;
+        }
+
+        Transform runtimeControls = settingsScreen.transform.Find("RuntimeSettingsControls");
+        Transform runtimeRow = runtimeControls != null ? runtimeControls.Find("ShowPingRow") : null;
+        if (runtimeRow != null)
+        {
+            SetActive(runtimeRow.gameObject, false);
+        }
+    }
+
     private void RefreshMineCountValidationMessage()
     {
         if (createMineCountErrorText == null || _controller == null)
@@ -779,6 +740,77 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         string value = createMineCountInput != null ? createMineCountInput.text : _controller.MineCountText;
         string error = GetMineCountValidationError(value);
         createMineCountErrorText.text = error;
+    }
+
+    private void RefreshFieldSizeDropdown()
+    {
+        if (createFieldSizeDropdown == null || _controller == null)
+        {
+            return;
+        }
+
+        if (!_controller.HasSelectedFieldSize)
+        {
+            createFieldSizeDropdown.RefreshShownValue();
+            return;
+        }
+
+        int selectedIndex = FindFieldSizeDropdownIndex(_controller.FieldSize);
+        if (selectedIndex >= 0)
+        {
+            createFieldSizeDropdown.SetValueWithoutNotify(selectedIndex);
+            createFieldSizeDropdown.RefreshShownValue();
+        }
+    }
+
+    private void ApplyFieldSizeDropdownValue(int value)
+    {
+        if (_controller == null)
+        {
+            return;
+        }
+
+        int fieldSize = GetFieldSizeFromDropdownIndex(value);
+        if (fieldSize <= 0)
+        {
+            _controller.ClearFieldSizeSelection();
+            return;
+        }
+
+        _controller.SetFieldSize(fieldSize);
+    }
+
+    private int FindFieldSizeDropdownIndex(int fieldSize)
+    {
+        if (createFieldSizeDropdown == null)
+        {
+            return -1;
+        }
+
+        string expected = fieldSize + "x" + fieldSize;
+        for (int index = 0; index < createFieldSizeDropdown.options.Count; index++)
+        {
+            if (string.Equals(createFieldSizeDropdown.options[index].text, expected, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private int GetFieldSizeFromDropdownIndex(int index)
+    {
+        if (createFieldSizeDropdown == null || index < 0 || index >= createFieldSizeDropdown.options.Count)
+        {
+            return 0;
+        }
+
+        string text = createFieldSizeDropdown.options[index].text;
+        if (string.Equals(text, "12x12", System.StringComparison.OrdinalIgnoreCase)) return 12;
+        if (string.Equals(text, "16x16", System.StringComparison.OrdinalIgnoreCase)) return 16;
+        if (string.Equals(text, "20x20", System.StringComparison.OrdinalIgnoreCase)) return 20;
+        return 0;
     }
 
     private string GetMineCountValidationError(string value)
@@ -817,6 +849,15 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         _controller.SetPlayerName(createPlayerNameInput != null ? createPlayerNameInput.text : "Player");
         _controller.SetRoomPassword(createPasswordInput != null ? createPasswordInput.text : "");
         _controller.SetMineCountText(createMineCountInput != null ? createMineCountInput.text : _controller.MineCountText);
+        if (createFieldSizeDropdown != null)
+        {
+            ApplyFieldSizeDropdownValue(createFieldSizeDropdown.value);
+        }
+        else
+        {
+            _controller.ClearFieldSizeSelection();
+        }
+
         RefreshMineCountValidationMessage();
         
         if (_controller.IsLocalScenario)

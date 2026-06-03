@@ -34,6 +34,8 @@ public sealed partial class CoopPrototypeController
     public int MineCount => _mineCount;
     public int MinAllowedMineCount => MinMineCount;
     public int MaxAllowedMineCount => MaxMineCount;
+    public int FieldSize => _fieldSize;
+    public bool HasSelectedFieldSize => _hasSelectedFieldSize;
     public int LocalPlayerId => _localPlayerId;
     public string AccessLabel => _isPrivateRoom ? "Password protected" : "Public";
     public string ActiveRoomDisplayName => string.IsNullOrWhiteSpace(_connectedRoomName) ? _roomCode : _connectedRoomName;
@@ -170,6 +172,18 @@ public sealed partial class CoopPrototypeController
     public void SetMineCountText(string value)
     {
         _mineCountText = value ?? string.Empty;
+    }
+
+    public void SetFieldSize(int value)
+    {
+        _fieldSize = value;
+        _hasSelectedFieldSize = IsValidFieldSize(value);
+    }
+
+    public void ClearFieldSizeSelection()
+    {
+        _fieldSize = DefaultFieldSize;
+        _hasSelectedFieldSize = false;
     }
 
     public void SetPrivateRoom(bool value)
