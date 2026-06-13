@@ -69,8 +69,75 @@ MonoBehaviour:
     pitchJitter: 0
     cooldown: 0
     spatial: 0
+  - eventId: 22
+    clips:
+    - {fileID: 8300000, guid: 29e483e51c8f78148b838cfe0b5babd9, type: 3}
+    volume: 0.3
+    pitchJitter: 0
+    cooldown: 0
+    spatial: 0
+  - eventId: 23
+    clips:
+    - {fileID: 8300000, guid: 80fd4ddb72aeb5c4497097fc8734f4fd, type: 3}
+    volume: 0.6
+    pitchJitter: 0
+    cooldown: 1.1
+    spatial: 0
+  - eventId: 25
+    clips:
+    - {fileID: 8300000, guid: 1359f55b8ea426e4084840dd7ce760ac, type: 3}
+    volume: 0.3
+    pitchJitter: 0
+    cooldown: 0
+    spatial: 0
+  - eventId: 27
+    clips:
+    - {fileID: 8300000, guid: be0bfafca42a1c84d95cf3969b0db6e9, type: 3}
+    volume: 0.3
+    pitchJitter: 0
+    cooldown: 0
+    spatial: 0
+  - eventId: 16
+    clips:
+    - {fileID: 8300000, guid: d6733796d68d3244696e73d009022546, type: 3}
+    volume: 0.3
+    pitchJitter: 0
+    cooldown: 0
+    spatial: 0
+  - eventId: 19
+    clips:
+    - {fileID: 8300000, guid: 68c3be42d4bae2443b0864877ed9ae7f, type: 3}
+    volume: 0.3
+    pitchJitter: 0
+    cooldown: 0
+    spatial: 0
+  - eventId: 20
+    clips:
+    - {fileID: 8300000, guid: 68c3be42d4bae2443b0864877ed9ae7f, type: 3}
+    volume: 0.3
+    pitchJitter: 0
+    cooldown: 0
+    spatial: 0
+  - eventId: 21
+    clips:
+    - {fileID: 8300000, guid: 6cfde180b2014274f8aeb5af62ce584b, type: 3}
+    volume: 0.2
+    pitchJitter: 0
+    cooldown: 0
+    spatial: 0
+  - eventId: 17
+    clips:
+    - {fileID: 8300000, guid: d6733796d68d3244696e73d009022546, type: 3}
+    volume: 0.3
+    pitchJitter: 0
+    cooldown: 0
+    spatial: 0
   music:
   - track: 1
-    clip: {fileID: 8300000, guid: dcd2537e7c85f064bb90328c9f4ecf9c, type: 3}
+    clip: {fileID: 8300000, guid: 520ad55f1396e814b91d45de58381451, type: 3}
     volume: 0.565
-    loop: 0
+    loop: 1
+  - track: 3
+    clip: {fileID: 8300000, guid: 9f76d0196ce165846babf3e74b60b32c, type: 3}
+    volume: 0.257
+    loop: 1

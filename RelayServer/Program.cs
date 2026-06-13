@@ -261,6 +261,26 @@ internal sealed class RelayServer : IDisposable
                     }
 
                     room.BroadcastGameStarted();
+                    continue;
+                }
+
+                if (message.Type == "UpdateRoomSettingsRequest")
+                {
+                    if (!room.TryUpdateSettings(
+                            player.PlayerId,
+                            message.MineCount,
+                            message.FieldSize,
+                            out string settingsError))
+                    {
+                        Send(writer, new CoopNetworkMessage
+                        {
+                            Type = "Error",
+                            Reason = settingsError
+                        });
+                        continue;
+                    }
+
+                    room.BroadcastSnapshot();
                 }
             }
         }
@@ -422,8 +442,8 @@ internal sealed class RelayRoom : IDisposable
     public string RoomCode { get; }
     public string RoomName { get; }
     public bool IsPrivate { get; }
-    public int MineCount { get; }
-    public int FieldSize { get; }
+    public int MineCount { get; private set; }
+    public int FieldSize { get; private set; }
     public string State { get; private set; }
     private string Password { get; }
 
@@ -537,6 +557,46 @@ internal sealed class RelayRoom : IDisposable
             error = string.Empty;
             return true;
         }
+    }
+
+    public bool TryUpdateSettings(int requestingPlayerId, int mineCount, int fieldSize, out string error)
+    {
+        lock (_sync)
+        {
+            if (requestingPlayerId != 1)
+            {
+                error = "Only the host can change room settings.";
+                return false;
+            }
+
+            if (State == RoomStateInGame)
+            {
+                error = "Room settings cannot be changed after the game starts.";
+                return false;
+            }
+
+            if (!IsValidFieldSize(fieldSize))
+            {
+                error = fieldSize == 0 ? "Field size is not specified" : "Invalid field size.";
+                return false;
+            }
+
+            if (mineCount < 5 || mineCount > 40)
+            {
+                error = "Mine count must be between 5 and 40.";
+                return false;
+            }
+
+            MineCount = mineCount;
+            FieldSize = fieldSize;
+            error = string.Empty;
+            return true;
+        }
+    }
+
+    private static bool IsValidFieldSize(int fieldSize)
+    {
+        return fieldSize == 12 || fieldSize == 16 || fieldSize == 20;
     }
 
     public CoopPlayerSnapshot[] BuildSnapshot()

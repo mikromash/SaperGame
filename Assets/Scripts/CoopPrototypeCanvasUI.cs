@@ -75,6 +75,11 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
     [SerializeField] private TMP_Text waitingRoomNameText;        // Назва кімнати
     [SerializeField] private TMP_Text waitingRoomCodeText;        // Код кімнати
     [SerializeField] private TMP_Text waitingRoomAccessText;      // Access (Public/Private)
+    [SerializeField] private TMP_Text waitingRoomFieldSizeText;
+    [SerializeField] private TMP_Text waitingRoomMineCountText;
+    [SerializeField] private TMP_InputField waitingRoomHostMineCountInput;
+    [SerializeField] private TMP_Dropdown waitingRoomHostFieldSizeDropdown;
+    [SerializeField] private TMP_Text waitingRoomSettingsStatusText;
     
     [SerializeField] private Button waitingRoomCopyCodeButton;    // Кнопка скопіювати код
     [SerializeField] private TMP_Text waitingRoomCopyButtonText;  // Текст всередині кнопки копіювання ("Copy" -> "Скопійовано")
@@ -363,6 +368,24 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         if (waitingRoomAccessText != null) 
             waitingRoomAccessText.text = (_controller.IsPrivateRoom ? "Private" : "Public");
 
+        if (waitingRoomFieldSizeText != null)
+        {
+            int fieldSize = _controller.FieldSize;
+            waitingRoomFieldSizeText.text = $"Field size: {fieldSize} \u00d7 {fieldSize}";
+        }
+
+        if (waitingRoomMineCountText != null)
+        {
+            waitingRoomMineCountText.text = $"Bombs: {_controller.MineCount}";
+        }
+
+        if (waitingRoomSettingsStatusText != null)
+        {
+            waitingRoomSettingsStatusText.text = _controller.StatusText;
+        }
+
+        RefreshWaitingRoomHostSettings(isHost);
+
         // 4. Кнопка керування грою (Тільки для Хоста)
         SetActive(waitingRoomStartButton, isHost);
 
@@ -514,6 +537,21 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         {
             createFieldSizeDropdown.onValueChanged.AddListener(value => {
                 ApplyFieldSizeDropdownValue(value);
+                AudioController.Play(AudioEvent.UiToggle);
+            });
+        }
+
+        if (waitingRoomHostMineCountInput != null)
+        {
+            waitingRoomHostMineCountInput.contentType = TMP_InputField.ContentType.IntegerNumber;
+            waitingRoomHostMineCountInput.characterLimit = 2;
+            waitingRoomHostMineCountInput.onEndEdit.AddListener(_ => TryApplyWaitingRoomSettings());
+        }
+
+        if (waitingRoomHostFieldSizeDropdown != null)
+        {
+            waitingRoomHostFieldSizeDropdown.onValueChanged.AddListener(_ => {
+                TryApplyWaitingRoomSettings();
                 AudioController.Play(AudioEvent.UiToggle);
             });
         }
@@ -807,6 +845,84 @@ public sealed class CoopPrototypeCanvasUI : MonoBehaviour
         }
 
         string text = createFieldSizeDropdown.options[index].text;
+        if (string.Equals(text, "12x12", System.StringComparison.OrdinalIgnoreCase)) return 12;
+        if (string.Equals(text, "16x16", System.StringComparison.OrdinalIgnoreCase)) return 16;
+        if (string.Equals(text, "20x20", System.StringComparison.OrdinalIgnoreCase)) return 20;
+        return 0;
+    }
+
+    private void RefreshWaitingRoomHostSettings(bool isHost)
+    {
+        SetActive(waitingRoomHostMineCountInput, isHost);
+        SetActive(waitingRoomHostFieldSizeDropdown, isHost);
+
+        if (!isHost || _controller == null)
+        {
+            return;
+        }
+
+        if (waitingRoomHostMineCountInput != null && !waitingRoomHostMineCountInput.isFocused)
+        {
+            SetInputTextWithoutNotify(waitingRoomHostMineCountInput, _controller.MineCount.ToString());
+        }
+
+        int fieldSizeIndex = FindFieldSizeDropdownIndex(waitingRoomHostFieldSizeDropdown, _controller.FieldSize);
+        if (waitingRoomHostFieldSizeDropdown != null &&
+            fieldSizeIndex >= 0 &&
+            waitingRoomHostFieldSizeDropdown.value != fieldSizeIndex)
+        {
+            waitingRoomHostFieldSizeDropdown.SetValueWithoutNotify(fieldSizeIndex);
+            waitingRoomHostFieldSizeDropdown.RefreshShownValue();
+        }
+    }
+
+    private void TryApplyWaitingRoomSettings()
+    {
+        if (_controller == null || !_controller.IsHost || !_controller.IsWaitingRoom)
+        {
+            return;
+        }
+
+        string mineCountValue = waitingRoomHostMineCountInput != null
+            ? waitingRoomHostMineCountInput.text
+            : _controller.MineCount.ToString();
+
+        int.TryParse(mineCountValue, out int mineCount);
+
+        int fieldSize = waitingRoomHostFieldSizeDropdown != null
+            ? GetFieldSizeFromDropdownIndex(waitingRoomHostFieldSizeDropdown, waitingRoomHostFieldSizeDropdown.value)
+            : _controller.FieldSize;
+
+        _controller.TryUpdateRoomSettings(mineCount, fieldSize);
+    }
+
+    private static int FindFieldSizeDropdownIndex(TMP_Dropdown dropdown, int fieldSize)
+    {
+        if (dropdown == null)
+        {
+            return -1;
+        }
+
+        string expected = fieldSize + "x" + fieldSize;
+        for (int index = 0; index < dropdown.options.Count; index++)
+        {
+            if (string.Equals(dropdown.options[index].text, expected, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static int GetFieldSizeFromDropdownIndex(TMP_Dropdown dropdown, int index)
+    {
+        if (dropdown == null || index < 0 || index >= dropdown.options.Count)
+        {
+            return 0;
+        }
+
+        string text = dropdown.options[index].text;
         if (string.Equals(text, "12x12", System.StringComparison.OrdinalIgnoreCase)) return 12;
         if (string.Equals(text, "16x16", System.StringComparison.OrdinalIgnoreCase)) return 16;
         if (string.Equals(text, "20x20", System.StringComparison.OrdinalIgnoreCase)) return 20;
