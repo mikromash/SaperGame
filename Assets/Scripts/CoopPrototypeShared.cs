@@ -228,29 +228,6 @@ internal sealed class CoopRelayClient
         }
     }
 
-    public void SendRoomSettingsUpdate(int mineCount, int fieldSize)
-    {
-        if (ConnectionState != CoopPrototypeController.PlayerConnectionState.Connected)
-        {
-            return;
-        }
-
-        try
-        {
-            Send(new CoopNetworkMessage
-            {
-                Type = "UpdateRoomSettingsRequest",
-                MineCount = mineCount,
-                FieldSize = fieldSize
-            });
-        }
-        catch (Exception exception)
-        {
-            Status = "Connection lost: " + exception.Message;
-            Disconnect();
-        }
-    }
-
     public void SendPing(long pingTicks)
     {
         // Пинг измеряется простым echo-механизмом через relay.
@@ -634,27 +611,6 @@ internal sealed class CoopEmbeddedRelayServer
                         }
 
                         room.BroadcastGameStarted();
-                        continue;
-                    }
-
-                    if (message != null && message.Type == "UpdateRoomSettingsRequest")
-                    {
-                        string errorMessage;
-                        if (!room.TryUpdateSettings(
-                                player.PlayerId,
-                                message.MineCount,
-                                message.FieldSize,
-                                out errorMessage))
-                        {
-                            Send(writer, new CoopNetworkMessage
-                            {
-                                Type = "Error",
-                                Reason = errorMessage
-                            });
-                            continue;
-                        }
-
-                        room.BroadcastSnapshot();
                     }
                 }
             }
@@ -811,9 +767,9 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
 
     public bool IsPrivate { get; }
 
-    public int MineCount { get; private set; }
+    public int MineCount { get; }
 
-    public int FieldSize { get; private set; }
+    public int FieldSize { get; }
 
     private string Password { get; }
 
@@ -930,41 +886,6 @@ internal sealed class CoopEmbeddedRelayRoom : IDisposable
             }
 
             State = RoomStateInGame;
-            error = string.Empty;
-            return true;
-        }
-    }
-
-    public bool TryUpdateSettings(int requestingPlayerId, int mineCount, int fieldSize, out string error)
-    {
-        lock (_sync)
-        {
-            if (requestingPlayerId != 1)
-            {
-                error = "Only the host can change room settings.";
-                return false;
-            }
-
-            if (State == RoomStateInGame)
-            {
-                error = "Room settings cannot be changed after the game starts.";
-                return false;
-            }
-
-            if (!IsValidFieldSize(fieldSize))
-            {
-                error = fieldSize == 0 ? "Field size is not specified" : "Invalid field size.";
-                return false;
-            }
-
-            if (mineCount < 5 || mineCount > 40)
-            {
-                error = "Mine count must be between 5 and 40.";
-                return false;
-            }
-
-            MineCount = mineCount;
-            FieldSize = fieldSize;
             error = string.Empty;
             return true;
         }
