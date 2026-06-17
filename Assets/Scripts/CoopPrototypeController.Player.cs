@@ -164,7 +164,7 @@ public sealed partial class CoopPrototypeController
 
             _localCharacterController.height = 1.8f;
             _localCharacterController.radius = 0.3f;
-            _localCharacterController.center = Vector3.zero;
+            _localCharacterController.center = new Vector3(0f, 0.9f, 0f);
             _localCharacterController.stepOffset = 0.3f;
             _localCharacterController.minMoveDistance = 0.001f;
         }

@@ -47,7 +47,7 @@ public sealed class CoopScenePlayerAvatar : MonoBehaviour
         {
             GameObject labelRoot = new GameObject("NameLabel");
             labelRoot.transform.SetParent(transform, false);
-            labelRoot.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+            labelRoot.transform.localPosition = new Vector3(0f, 3.6f, 0f);
             nameLabel = labelRoot.AddComponent<TextMesh>();
             nameLabel.anchor = TextAnchor.MiddleCenter;
             nameLabel.alignment = TextAlignment.Center;

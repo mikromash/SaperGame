@@ -189,6 +189,48 @@ public sealed partial class CoopPrototypeController
         _status = "\u0417\u0430\u043f\u0443\u0441\u043a \u043c\u0430\u0442\u0447\u0430...";
     }
 
+    public bool TryUpdateRoomSettings(int mineCount, int fieldSize)
+    {
+        if (_relayClient == null || _relayClient.ConnectionState != PlayerConnectionState.Connected)
+        {
+            _status = "There is no active room connection.";
+            AudioController.Play(AudioEvent.UiError);
+            return false;
+        }
+
+        if (!_isHost)
+        {
+            _status = "Only the host can change room settings.";
+            AudioController.Play(AudioEvent.UiError);
+            return false;
+        }
+
+        if (_roomState == "in_game")
+        {
+            _status = "Room settings cannot be changed after the game starts.";
+            AudioController.Play(AudioEvent.UiError);
+            return false;
+        }
+
+        if (mineCount < MinMineCount || mineCount > MaxMineCount)
+        {
+            _status = $"Mine count must be between {MinMineCount} and {MaxMineCount}.";
+            AudioController.Play(AudioEvent.UiError);
+            return false;
+        }
+
+        if (!IsValidFieldSize(fieldSize))
+        {
+            _status = fieldSize == 0 ? "Field size is not specified" : "Invalid field size.";
+            AudioController.Play(AudioEvent.UiError);
+            return false;
+        }
+
+        _relayClient.SendRoomSettingsUpdate(mineCount, fieldSize);
+        _status = "Updating room settings...";
+        return true;
+    }
+
     public bool IsMinesweeperSyncActive
     {
         get
